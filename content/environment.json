@@ -1,0 +1,48 @@
+{
+  "_comment": "行星环境事件（第5模块：拓展性验收对象）。周期性roll事件，effects 调制生产/记忆/光照(solar/pv)/风(wind)。全部数据驱动，不动内核。solar=光热倍率；pv=光伏倍率(削减更狠)；wind=风电倍率(沙暴增强)。",
+  "events": [
+    {
+      "id": "fair",
+      "name": "季风间歇",
+      "weight": 45,
+      "duration": 150.0,
+      "effects": {},
+      "desc": "大气稳定，一切生产正常。"
+    },
+    {
+      "id": "dust_storm",
+      "name": "沙暴",
+      "weight": 24,
+      "duration": 90.0,
+      "effects": {"production": 0.6, "solar": 0.3, "pv": 0.05,
+                  "wind": 1.5},
+      "desc": "能见度骤降：光伏几乎停摆(pv 0.05)，光热尚余三成；大风让风电增强。"
+    },
+    {
+      "id": "ion_storm",
+      "name": "电离层风暴",
+      "weight": 18,
+      "duration": 80.0,
+      "effects": {"production": 0.85, "memory": 1.8,
+                  "solar": 0.7, "pv": 0.5, "wind": 1.2},
+      "desc": "高能粒子流干扰存储介质；大气扰动略削光照、略增风。"
+    },
+    {
+      "id": "meteor_shower",
+      "name": "流星雨",
+      "weight": 8,
+      "duration": 40.0,
+      "effects": {"production": 0.5, "solar": 0.6, "pv": 0.4,
+                  "wind": 1.1},
+      "desc": "天降陨石，野外作业风险升高；扬尘遮蔽部分日光。"
+    },
+    {
+      "id": "aurora",
+      "name": "磁极光",
+      "weight": 5,
+      "duration": 60.0,
+      "effects": {"production": 1.1, "pv": 1.2},
+      "desc": "磁场活跃，精密设备状态奇佳；漫射极光让光伏多捱片刻。"
+    }
+  ]
+}

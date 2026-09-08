@@ -1,0 +1,45 @@
+{
+  "_comment": "可靠数据库终局工程（v1 胜利条件）。五个子系统全部竣工 → 广播 database_complete，记忆劣化终止。power_req = 建造门槛(电网需能支撑此存量，不扣减)；cost 仅材料。",
+  "projects": [
+    {
+      "id": "db_media_line",
+      "name": "磁介质生产线",
+      "desc": "把钢轧制成磁带/磁鼓介质。需要：钢(结构)+稳定电网。",
+      "cost": {"steel": 40.0},
+      "power_req": 100.0,
+      "duration": 30.0
+    },
+    {
+      "id": "db_precision_head",
+      "name": "精密读写机构",
+      "desc": "磁头与走带机构。冶金精度与机械加工能力的试金石。",
+      "cost": {"steel": 30.0, "scrap_alloy": 25.0},
+      "power_req": 120.0,
+      "duration": 40.0
+    },
+    {
+      "id": "db_chemical_plant",
+      "name": "介质化学处理线",
+      "desc": "磁性涂层/刻蚀/钝化 —— 硫酸与氨在此各司其职。",
+      "cost": {"sulfuric_acid": 25.0, "ammonia": 15.0},
+      "power_req": 80.0,
+      "duration": 35.0
+    },
+    {
+      "id": "db_redundant_array",
+      "name": "冗余阵列舱",
+      "desc": "多副本容错结构。需要大量钢材与精密合金。",
+      "cost": {"steel": 60.0, "scrap_alloy": 40.0},
+      "power_req": 150.0,
+      "duration": 50.0
+    },
+    {
+      "id": "db_environment",
+      "name": "恒温恒湿屏蔽壳",
+      "desc": "环境控制与辐射屏蔽 —— 用硫酸钝化、氨制冷循环。",
+      "cost": {"steel": 30.0, "sulfuric_acid": 15.0, "ammonia": 10.0},
+      "power_req": 100.0,
+      "duration": 40.0
+    }
+  ]
+}

@@ -1,0 +1,152 @@
+"""数据库恢复系统：研究 = 恢复受损存储中的知识条目。
+
+条目生命周期：
+  locked(未恢复) →(recover 作业: 耗时+消耗恢复资源) active(临时可用)
+  active →(fixate 作业: 消耗固化资源) permanent(永久)
+  active →(temporary_ttl 到期 或 记忆崩溃事件) locked(丢失，需重新恢复)
+
+解锁语义：facility 定义携带 requires_recovery；industry 在建造与运行时
+查询本系统 is_unlocked —— 条目丢失会使依赖它的设施停摆，固化才保险。
+这正是"研究是临时的，必须烧录固化"的机制表达。
+"""
+from typing import Dict, List, Optional
+
+
+class RecoverySystem:
+    def __init__(self, entries: List[dict]) -> None:
+        self.entries: Dict[str, dict] = {e["id"]: e for e in entries}
+        # status: locked / active / permanent
+        self.status: Dict[str, str] = {eid: "locked" for eid in self.entries}
+        self.active_until: Dict[str, float] = {}
+
+    def start(self, engine: object) -> None:
+        self._engine = engine
+        engine.bus.on("job_done", self._on_job_done)
+        engine.bus.on("memory_crash", self._on_memory_crash)
+
+    # ---- 门控查询 ---------------------------------------------------
+    def is_unlocked(self, entry_id: str) -> bool:
+        return self.status.get(entry_id) in ("active", "permanent")
+
+    def entry_list(self) -> List[dict]:
+        return [dict(e, state=self.status.get(e["id"], "locked"))
+                for e in self.entries.values()]
+
+    # ---- 指令 -------------------------------------------------------
+    def recover(self, engine: object, entry_id: str) -> Optional[str]:
+        e = self.entries.get(entry_id)
+        if e is None:
+            return f"未知条目: {entry_id}"
+        st = self.status.get(entry_id)
+        if st == "permanent":
+            return "该条目已永久固化。"
+        if st == "active":
+            return "该条目已恢复（临时可用），可执行 fixate 固化。"
+        # 依赖前置检查：需前置条目已永久固化
+        for dep in e.get("depends_on", []):
+            if self.status.get(dep) != "permanent":
+                dep_name = self.entries.get(dep, {}).get("name", dep)
+                return f"前置依赖未固化：需先永久固化「{dep_name}」。"
+        cost = e.get("cost", {})
+        for rid, amt in cost.items():
+            if not engine.economy.take(rid, float(amt)):
+                for rid2, amt2 in cost.items():
+                    if rid2 == rid:
+                        break
+                    engine.economy.add(rid2, float(amt2))
+                return f"恢复资源不足：缺 {rid} {amt:g}。"
+        unit = engine.units.assign_any("recover")
+        if unit is None:
+            for rid, amt in cost.items():
+                engine.economy.add(rid, float(amt))
+            return "没有空闲执行单元执行恢复作业。"
+        dur = float(e.get("duration", 10.0))
+        engine.jobs.add("recover", unit.id, entry_id, dur,
+                        {"entry": entry_id})
+        engine.log(f"[数据库] 恢复作业开始：{e['name']}"
+                   f"（单元 {unit.id}，{dur:.0f}s）。")
+        return None
+
+    def fixate(self, engine: object, entry_id: str) -> Optional[str]:
+        e = self.entries.get(entry_id)
+        if e is None:
+            return f"未知条目: {entry_id}"
+        if self.status.get(entry_id) != "active":
+            return "只能固化已恢复且尚未永久的条目（先 recover）。"
+        cost = e.get("fixate_cost", {})
+        for rid, amt in cost.items():
+            if not engine.economy.take(rid, float(amt)):
+                for rid2, amt2 in cost.items():
+                    if rid2 == rid:
+                        break
+                    engine.economy.add(rid2, float(amt2))
+                return f"固化资源不足：缺 {rid} {amt:g}。"
+        unit = engine.units.assign_any("fixate")
+        if unit is None:
+            for rid, amt in cost.items():
+                engine.economy.add(rid, float(amt))
+            return "没有空闲执行单元执行固化作业。"
+        dur = 6.0
+        engine.jobs.add("fixate", unit.id, entry_id, dur,
+                        {"entry": entry_id})
+        engine.log(f"[数据库] 烧录固化开始：{e['name']}（{dur:.0f}s）。")
+        return None
+
+    # ---- 作业完成 ---------------------------------------------------
+    def _on_job_done(self, payload: dict) -> None:
+        kind = payload.get("kind")
+        if kind not in ("recover", "fixate"):
+            return
+        entry_id = payload.get("target_id")
+        e = self.entries.get(entry_id)
+        if e is None:
+            return
+        if kind == "recover":
+            self.status[entry_id] = "active"
+            ttl = float(e.get("temporary_ttl", 90.0))
+            self.active_until[entry_id] = self._engine.clock.time + ttl
+            self._engine.log(
+                f"[数据库] {e['name']} 已恢复 —— 临时可用 {ttl:.0f}s，"
+                "速速 fixate 固化或趁热使用！")
+        else:
+            self.status[entry_id] = "permanent"
+            self.active_until.pop(entry_id, None)
+            self._engine.log(f"[数据库] {e['name']} 已永久固化。"
+                             "从此不再因记忆崩溃丢失。")
+
+    # ---- 记忆崩溃：所有未固化条目丢失 -------------------------------
+    def _on_memory_crash(self, payload: dict) -> None:
+        lost = [eid for eid, st in self.status.items()
+                if st == "active"]
+        if not lost:
+            return
+        for eid in lost:
+            self.status[eid] = "locked"
+            self.active_until.pop(eid, None)
+        names = "、".join(self.entries[eid]["name"] for eid in lost)
+        self._engine.log(f"[数据库] 记忆崩溃！未固化条目已丢失：{names}。"
+                         "已固化条目安然无恙。")
+
+    # ---- 每 tick：检查临时条目过期 ----------------------------------
+    def tick(self, engine: object, dt: float) -> None:
+        now = engine.clock.time
+        expired = [eid for eid, st in self.status.items()
+                   if st == "active"
+                   and self.active_until.get(eid, 0.0) <= now]
+        for eid in expired:
+            self.status[eid] = "locked"
+            self.active_until.pop(eid, None)
+            engine.log(f"[数据库] 条目「{self.entries[eid]['name']}」"
+                       "未及时固化，已从易失存储中丢失。")
+
+    # ---- 存档 -------------------------------------------------------
+    def to_dict(self) -> dict:
+        return {"status": dict(self.status),
+                "active_until": {k: v for k, v in self.active_until.items()}}
+
+    def load(self, data: dict) -> None:
+        self.status.update(data.get("status", {}))
+        for eid in self.entries:
+            self.status.setdefault(eid, "locked")
+        self.active_until = {
+            k: float(v) for k, v in data.get("active_until", {}).items()}

@@ -1,0 +1,10 @@
+# 运行时目录：存档 JSON
+saves/
+
+# 发布快照与批次备份（本地留档，不入版本库）
+releases/
+_refactor_backup/
+
+# Python 缓存
+__pycache__/
+*.pyc

@@ -1,0 +1,451 @@
+{
+ "_comment": "内容层：全部游戏内容 = JSON 数据，引擎只认识 id。加新物质 = 加一条记录，不改代码。",
+ "substances": [
+  {
+   "id": "iron_ore",
+   "name": "铁矿石",
+   "category": "矿物",
+   "unit": "t",
+   "desc": "地表赤铁矿露头。炼铁原料，品位与脉量决定价值。"
+  },
+  {
+   "id": "coal",
+   "name": "煤",
+   "category": "矿物",
+   "unit": "t",
+   "desc": "能源与焦炭原料。燃烧/干馏的核心输入。",
+   "heat_value": 24.0,
+   "fuel_class": "solid"
+  },
+  {
+   "id": "limestone",
+   "name": "石灰石",
+   "category": "矿物",
+   "unit": "t",
+   "desc": "高炉造渣剂/炼铁必需助熔剂，也是建材。"
+  },
+  {
+   "id": "copper_ore",
+   "name": "铜矿石",
+   "category": "矿物",
+   "unit": "t",
+   "desc": "低品位铜矿。电解/导线等电气化原料。"
+  },
+  {
+   "id": "sulfur",
+   "name": "硫磺",
+   "category": "矿物",
+   "unit": "t",
+   "desc": "接触法硫酸的原料，深圈层矿藏。",
+   "heat_value": 9.0,
+   "fuel_class": "solid"
+  },
+  {
+   "id": "water",
+   "name": "水",
+   "category": "资源",
+   "unit": "m³",
+   "desc": "冷却、蒸汽、化工用水。生命支持底线。"
+  },
+  {
+   "id": "pig_iron",
+   "name": "生铁",
+   "category": "金属",
+   "unit": "t",
+   "desc": "高炉产物。含碳高而脆，需炼钢去碳。"
+  },
+  {
+   "id": "coke",
+   "name": "焦炭",
+   "category": "材料",
+   "unit": "t",
+   "desc": "煤干馏产物。高炉的还原剂兼燃料。",
+   "heat_value": 30.0,
+   "fuel_class": "solid"
+  },
+  {
+   "id": "steel",
+   "name": "钢",
+   "category": "金属",
+   "unit": "t",
+   "desc": "去碳强化的铁。结构、机械、高压容器的原料。"
+  },
+  {
+   "id": "sulfuric_acid",
+   "name": "硫酸",
+   "category": "化工",
+   "unit": "t",
+   "desc": "接触法产物。化工之母，几乎一切深加工的酸源。"
+  },
+  {
+   "id": "ammonia",
+   "name": "氨",
+   "category": "化工",
+   "unit": "t",
+   "desc": "哈伯法固氮产物。化肥/硝酸/炸药的氮源。"
+  },
+  {
+   "id": "scrap_alloy",
+   "name": "残骸合金",
+   "category": "回收",
+   "unit": "t",
+   "desc": "坠毁船体可回收的轻合金，ASI 初级结构材料。"
+  },
+  {
+   "id": "salt",
+   "name": "盐",
+   "category": "矿物",
+   "unit": "t",
+   "desc": "蒸发岩/卤水。氯碱电解的原料。"
+  },
+  {
+   "id": "petroleum",
+   "name": "石油",
+   "category": "矿物",
+   "unit": "t",
+   "desc": "地下烃类矿藏。裂解产乙烯/汽油。",
+   "heat_value": 42.0,
+   "fuel_class": "liquid"
+  },
+  {
+   "id": "caustic",
+   "name": "烧碱",
+   "category": "化工",
+   "unit": "t",
+   "desc": "氯碱电解产物。基础化工用碱。"
+  },
+  {
+   "id": "chlorine",
+   "name": "氯",
+   "category": "化工",
+   "unit": "t",
+   "desc": "氯碱电解出路。消毒/化工原料。"
+  },
+  {
+   "id": "nitric_acid",
+   "name": "硝酸",
+   "category": "化工",
+   "unit": "t",
+   "desc": "氨氧化产物。炸药/化肥原料。"
+  },
+  {
+   "id": "explosive",
+   "name": "炸药",
+   "category": "化工",
+   "unit": "t",
+   "desc": "硝酸硝化产物。开矿/工程用。"
+  },
+  {
+   "id": "ethylene",
+   "name": "乙烯",
+   "category": "化工",
+   "unit": "t",
+   "desc": "石油裂解产物。合成材料单体。",
+   "heat_value": 47.0,
+   "fuel_class": "gas"
+  },
+  {
+   "id": "gasoline",
+   "name": "汽油",
+   "category": "化工",
+   "unit": "t",
+   "desc": "石油蒸馏/裂解产物。燃料与溶剂。",
+   "heat_value": 44.0,
+   "fuel_class": "liquid"
+  },
+  {
+   "id": "electricity",
+   "name": "电力",
+   "category": "能源",
+   "unit": "kWh",
+   "desc": "一切设施运转的通用输入。"
+  },
+  {
+   "id": "coalgas",
+   "name": "焦炉煤气",
+   "category": "燃气",
+   "unit": "m³",
+   "desc": "炼焦副产，高热值燃气，可发电。",
+   "heat_value": 18.0,
+   "fuel_class": "gas"
+  },
+  {
+   "id": "bfgas",
+   "name": "高炉煤气",
+   "category": "燃气",
+   "unit": "m³",
+   "desc": "高炉副产，低热值量大，可回收发电。",
+   "heat_value": 3.5,
+   "fuel_class": "gas"
+  },
+  {
+   "id": "hydrogen",
+   "name": "氢气",
+   "category": "燃气",
+   "unit": "m³",
+   "desc": "氯碱/裂解副产。高热值，也是化工原料。",
+   "heat_value": 120.0,
+   "fuel_class": "gas"
+  },
+  {
+   "id": "coaltar",
+   "name": "煤焦油",
+   "category": "化工",
+   "unit": "t",
+   "desc": "炼焦副产。提苯/酚的原料库，高价值。"
+  },
+  {
+   "id": "benzene",
+   "name": "苯",
+   "category": "化工",
+   "unit": "t",
+   "desc": "煤焦油/重整产物。合成材料单体。"
+  },
+  {
+   "id": "phenol",
+   "name": "苯酚",
+   "category": "化工",
+   "unit": "t",
+   "desc": "煤焦油产物。酚醛树脂原料。"
+  },
+  {
+   "id": "crack_gas",
+   "name": "裂解干气",
+   "category": "燃气",
+   "unit": "m³",
+   "desc": "石油裂解副产燃气，可发电。",
+   "heat_value": 38.0,
+   "fuel_class": "gas"
+  },
+  {
+   "id": "copper",
+   "name": "精铜",
+   "category": "金属",
+   "unit": "t",
+   "desc": "电解精炼铜。电缆/电机原料。"
+  },
+  {
+   "id": "bauxite",
+   "name": "铝土矿",
+   "category": "矿物",
+   "unit": "t",
+   "desc": "炼铝原料。"
+  },
+  {
+   "id": "aluminum",
+   "name": "铝",
+   "category": "金属",
+   "unit": "t",
+   "desc": "电解铝。轻而导电，电缆替代。"
+  },
+  {
+   "id": "cable",
+   "name": "铜电缆",
+   "category": "材料",
+   "unit": "t",
+   "desc": "精铜线缆。电网升级/电机。"
+  },
+  {
+   "id": "kerosene",
+   "name": "煤油",
+   "category": "化工",
+   "unit": "t",
+   "heat_value": 43.0,
+   "desc": "石油分馏中沸点适中馏分(C10-C16)。教材：分馏产物之一，曾作照明燃料。",
+   "fuel_class": "liquid"
+  },
+  {
+   "id": "diesel",
+   "name": "柴油",
+   "category": "化工",
+   "unit": "t",
+   "heat_value": 45.0,
+   "desc": "石油分馏较高沸点馏分。教材：分馏产物，密度较大。",
+   "fuel_class": "liquid"
+  },
+  {
+   "id": "fuel_oil",
+   "name": "重油",
+   "category": "化工",
+   "unit": "t",
+   "heat_value": 41.0,
+   "desc": "石油分馏残余的高沸点馏分。教材：可进一步裂化得轻质油；游戏内可烧。",
+   "fuel_class": "liquid"
+  },
+  {
+   "id": "polyethyl",
+   "name": "聚乙烯",
+   "category": "材料",
+   "unit": "t",
+   "desc": "乙烯加聚产物，结构简式 [-CH2-CH2-]n。教材：n CH2=CH2 → [-CH2-CH2-]n(加聚反应)。塑料之母。"
+  },
+  {
+   "id": "nickel_ore",
+   "name": "镍矿石",
+   "category": "矿物",
+   "unit": "t",
+   "desc": "硫化镍矿/红土镍矿。工业镍主要来源，需选矿富集。"
+  },
+  {
+   "id": "chrome_ore",
+   "name": "铬矿石",
+   "category": "矿物",
+   "unit": "t",
+   "desc": "铬铁矿(FeCr2O4)。不锈钢与电镀的铬源。"
+  },
+  {
+   "id": "tungsten_ore",
+   "name": "钨矿石",
+   "category": "矿物",
+   "unit": "t",
+   "desc": "黑钨矿(Fe,Mn)WO4。高熔点金属原料。"
+  },
+  {
+   "id": "nickel_concentrate",
+   "name": "镍精矿",
+   "category": "材料",
+   "unit": "t",
+   "desc": "镍矿选矿富集产物，送冶炼。"
+  },
+  {
+   "id": "chrome_concentrate",
+   "name": "铬精矿",
+   "category": "材料",
+   "unit": "t",
+   "desc": "铬铁矿选矿富集产物，送冶炼。"
+  },
+  {
+   "id": "tungsten_concentrate",
+   "name": "钨精矿",
+   "category": "材料",
+   "unit": "t",
+   "desc": "钨矿选矿富集产物，送冶炼。"
+  },
+  {
+   "id": "nickel",
+   "name": "镍",
+   "category": "金属",
+   "unit": "t",
+   "desc": "银白金属，耐蚀。教材：不锈钢/镍基合金的关键组分。"
+  },
+  {
+   "id": "chrome",
+   "name": "铬",
+   "category": "金属",
+   "unit": "t",
+   "desc": "硬而亮的金属。教材：不锈钢靠表面致密 Cr2O3 钝化膜抗蚀。"
+  },
+  {
+   "id": "tungsten",
+   "name": "钨",
+   "category": "金属",
+   "unit": "t",
+   "desc": "熔点最高的金属(3422℃)。教材：灯丝/硬质合金/超合金耐热。"
+  },
+  {
+   "id": "stainless",
+   "name": "不锈钢",
+   "category": "金属",
+   "unit": "t",
+   "desc": "含铬≥10.5%的钢。教材：Cr 生成钝化膜抗蚀；耐压容器/化工设备的理想材料。"
+  },
+  {
+   "id": "superalloy",
+   "name": "高温合金",
+   "category": "金属",
+   "unit": "t",
+   "desc": "镍基/钴基耐热合金。教材：加 Cr/W 强化晶格，耐 900℃+，燃气轮机叶片材料。"
+  },
+  {
+   "id": "monazite",
+   "name": "独居石",
+   "category": "矿物",
+   "unit": "t",
+   "desc": "稀土磷酸盐矿(含铈/镧/钕)。稀土工业的起点矿种。"
+  },
+  {
+   "id": "rare_concentrate",
+   "name": "稀土精矿",
+   "category": "材料",
+   "unit": "t",
+   "desc": "独居石选矿富集产物，送酸浸/萃取分离。"
+  },
+  {
+   "id": "cerium",
+   "name": "铈",
+   "category": "金属",
+   "unit": "t",
+   "desc": "稀土元素，最丰。教材：CeO2 抛光粉/催化剂载体/玻璃脱色。"
+  },
+  {
+   "id": "lanthanum",
+   "name": "镧",
+   "category": "金属",
+   "unit": "t",
+   "desc": "稀土元素。教材：镧镍合金储氢；光学玻璃。"
+  },
+  {
+   "id": "neodymium",
+   "name": "钕",
+   "category": "金属",
+   "unit": "t",
+   "desc": "稀土元素。教材：NdFeB 永磁体，电机/硬盘的磁王。"
+  },
+  {
+   "id": "vanadium",
+   "name": "钒",
+   "category": "金属",
+   "unit": "t",
+   "desc": "铬矿伴生。教材：V2O5 是接触法硫酸的催化剂。"
+  },
+  {
+   "id": "catalyst_v",
+   "name": "钒系催化剂",
+   "category": "材料",
+   "unit": "t",
+   "desc": "教材：接触法 SO2→SO3 用 V2O5 作催化剂；催化剂改变反应速率但不消耗。"
+  },
+  {
+   "id": "catalyst_cc",
+   "name": "稀土分子筛催化剂",
+   "category": "材料",
+   "unit": "t",
+   "desc": "教材：石油催化裂化用分子筛催化剂(稀土改性)，比热裂化得更多轻质油。"
+  },
+  {
+   "id": "silica",
+   "name": "石英砂",
+   "category": "矿物",
+   "unit": "t",
+   "desc": "SiO2 砂矿。教材：沙子的主要成分，电子工业的起点原料。"
+  },
+  {
+   "id": "silicon",
+   "name": "工业硅",
+   "category": "金属",
+   "unit": "t",
+   "desc": "碳热还原 SiO2+2C→Si+2CO 制得(98-99%)。提纯前的粗硅。"
+  },
+  {
+   "id": "hcl",
+   "name": "氯化氢",
+   "category": "化工",
+   "unit": "t",
+   "desc": "教材：Cl2+H2 燃烧合成。溶于水成盐酸；提硅的氯化剂。"
+  },
+  {
+   "id": "tcs",
+   "name": "三氯氢硅",
+   "category": "化工",
+   "unit": "t",
+   "desc": "SiHCl3。教材：粗硅与氯化氢反应 Si+3HCl→SiHCl3+H2，西门子法中间体。"
+  },
+  {
+   "id": "polysilicon",
+   "name": "多晶硅",
+   "category": "材料",
+   "unit": "t",
+   "desc": "西门子法 CVD 还原的高纯硅(9N)。教材：芯片与光伏的基材。"
+  }
+ ]
+}

@@ -1,0 +1,467 @@
+{
+ "_comment": "配方：设施级连续工艺。速率单位 = 每游戏秒。M2 真实工艺链。",
+ "recipes": [
+  {
+   "id": "burn_coal",
+   "name": "燃煤发电",
+   "inputs": {
+    "coal": 0.4
+   },
+   "outputs": {
+    "electricity": 1.6
+   }
+  },
+  {
+   "id": "coke_from_coal",
+   "name": "煤干馏",
+   "inputs": {
+    "coal": 0.5,
+    "electricity": 0.1
+   },
+   "outputs": {
+    "coke": 0.35
+   },
+   "byproducts": {
+    "coalgas": 0.25,
+    "coaltar": 0.05
+   }
+  },
+  {
+   "id": "blast_furnace_smelt",
+   "name": "高炉炼铁",
+   "inputs": {
+    "iron_ore": 0.3,
+    "coke": 0.2,
+    "limestone": 0.1,
+    "electricity": 0.2
+   },
+   "outputs": {
+    "pig_iron": 0.25
+   },
+   "byproducts": {
+    "bfgas": 0.4
+   }
+  },
+  {
+   "id": "steel_making",
+   "name": "炼钢",
+   "inputs": {
+    "pig_iron": 0.25,
+    "electricity": 0.3
+   },
+   "outputs": {
+    "steel": 0.22
+   }
+  },
+  {
+   "id": "sulfuric_contact",
+   "name": "接触法制硫酸",
+   "inputs": {
+    "sulfur": 0.15,
+    "water": 0.4,
+    "electricity": 0.4
+   },
+   "outputs": {
+    "sulfuric_acid": 0.3
+   }
+  },
+  {
+   "id": "haber_ammonia",
+   "name": "哈伯法合成氨",
+   "inputs": {
+    "coal": 0.3,
+    "water": 0.6,
+    "electricity": 1.0
+   },
+   "outputs": {
+    "ammonia": 0.35
+   }
+  },
+  {
+   "id": "chloralkali",
+   "name": "氯碱电解",
+   "inputs": {
+    "salt": 0.3,
+    "water": 0.4,
+    "electricity": 0.8
+   },
+   "outputs": {
+    "caustic": 0.2,
+    "chlorine": 0.18
+   },
+   "byproducts": {
+    "hydrogen": 0.03
+   }
+  },
+  {
+   "id": "nitric_make",
+   "name": "硝酸合成",
+   "inputs": {
+    "sulfuric_acid": 0.1,
+    "ammonia": 0.15,
+    "electricity": 0.4
+   },
+   "outputs": {
+    "nitric_acid": 0.2
+   }
+  },
+  {
+   "id": "explosive_make",
+   "name": "炸药硝化",
+   "inputs": {
+    "nitric_acid": 0.15,
+    "electricity": 0.2
+   },
+   "outputs": {
+    "explosive": 0.12
+   }
+  },
+  {
+   "id": "petrol_crack",
+   "name": "石油裂解",
+   "inputs": {
+    "petroleum": 0.4,
+    "electricity": 0.6
+   },
+   "outputs": {
+    "ethylene": 0.15,
+    "gasoline": 0.2
+   },
+   "byproducts": {
+    "crack_gas": 0.2
+   }
+  },
+  {
+   "id": "tar_distill",
+   "name": "煤焦油分馏",
+   "inputs": {
+    "coaltar": 0.2,
+    "electricity": 0.1
+   },
+   "outputs": {
+    "benzene": 0.08,
+    "phenol": 0.05
+   }
+  },
+  {
+   "id": "copper_refine",
+   "name": "电解精铜",
+   "inputs": {
+    "copper_ore": 0.4,
+    "sulfuric_acid": 0.1,
+    "electricity": 0.6
+   },
+   "outputs": {
+    "copper": 0.35
+   }
+  },
+  {
+   "id": "aluminum_smelt",
+   "name": "霍尔电解炼铝",
+   "inputs": {
+    "bauxite": 0.5,
+    "electricity": 2.5
+   },
+   "outputs": {
+    "aluminum": 0.25
+   }
+  },
+  {
+   "id": "cable_draw",
+   "name": "拉制电缆",
+   "inputs": {
+    "copper": 0.3,
+    "electricity": 0.2
+   },
+   "outputs": {
+    "cable": 0.28
+   }
+  },
+  {
+   "id": "distill_petro",
+   "name": "石油常压蒸馏",
+   "inputs": {
+    "petroleum": 0.8,
+    "electricity": 0.3
+   },
+   "outputs": {
+    "gasoline": 0.15,
+    "kerosene": 0.12,
+    "diesel": 0.18,
+    "fuel_oil": 0.2
+   },
+   "desc": "教材：利用沸点不同分离(物理变化)。"
+  },
+  {
+   "id": "polymerize",
+   "name": "乙烯加聚制聚乙烯",
+   "inputs": {
+    "ethylene": 0.3,
+    "electricity": 0.15
+   },
+   "outputs": {
+    "polyethyl": 0.28
+   },
+   "desc": "教材：n CH2=CH2 → [-CH2-CH2-]n 加聚反应。"
+  },
+  {
+   "id": "concentrate_nickel",
+   "name": "镍矿选矿",
+   "inputs": {
+    "nickel_ore": 0.6,
+    "water": 0.3,
+    "electricity": 0.15
+   },
+   "outputs": {
+    "nickel_concentrate": 0.25
+   },
+   "desc": "教材：低品位矿经浮选富集得精矿(品位提高、量减少)。"
+  },
+  {
+   "id": "concentrate_chrome",
+   "name": "铬矿选矿",
+   "inputs": {
+    "chrome_ore": 0.6,
+    "water": 0.3,
+    "electricity": 0.15
+   },
+   "outputs": {
+    "chrome_concentrate": 0.3
+   },
+   "desc": "铬铁矿比重较高，重选富集。"
+  },
+  {
+   "id": "concentrate_tungsten",
+   "name": "钨矿选矿",
+   "inputs": {
+    "tungsten_ore": 0.6,
+    "water": 0.3,
+    "electricity": 0.15
+   },
+   "outputs": {
+    "tungsten_concentrate": 0.2
+   },
+   "desc": "钨矿品位极低，需多段选矿富集。"
+  },
+  {
+   "id": "arc_nickel",
+   "name": "电弧炉熔炼镍",
+   "inputs": {
+    "nickel_concentrate": 0.2,
+    "coke": 0.1,
+    "electricity": 1.8
+   },
+   "outputs": {
+    "nickel": 0.12
+   },
+   "desc": "焦炭还原+电弧高温。镍为不锈钢/超合金组分。"
+  },
+  {
+   "id": "arc_chrome",
+   "name": "电弧炉冶炼铬",
+   "inputs": {
+    "chrome_concentrate": 0.2,
+    "coke": 0.12,
+    "electricity": 1.8
+   },
+   "outputs": {
+    "chrome": 0.12
+   },
+   "byproducts": {
+    "vanadium": 0.02
+   },
+   "desc": "教材：碳热还原 Cr2O3。铬使钢不锈；铬铁矿常伴生钒。"
+  },
+  {
+   "id": "arc_tungsten",
+   "name": "电弧炉冶炼钨",
+   "inputs": {
+    "tungsten_concentrate": 0.2,
+    "coke": 0.12,
+    "electricity": 2.4
+   },
+   "outputs": {
+    "tungsten": 0.1
+   },
+   "desc": "教材：WO3 碳还原，需极高温度(钨熔点 3422℃)。"
+  },
+  {
+   "id": "make_stainless",
+   "name": "不锈钢冶炼",
+   "inputs": {
+    "steel": 0.3,
+    "chrome": 0.06,
+    "nickel": 0.05,
+    "electricity": 0.6
+   },
+   "outputs": {
+    "stainless": 0.28
+   },
+   "desc": "教材：含铬≥10.5% 的钢，Cr2O3 钝化膜抗蚀。"
+  },
+  {
+   "id": "make_superalloy",
+   "name": "高温合金制备",
+   "inputs": {
+    "steel": 0.2,
+    "nickel": 0.15,
+    "chrome": 0.05,
+    "tungsten": 0.03,
+    "electricity": 0.8
+   },
+   "outputs": {
+    "superalloy": 0.18
+   },
+   "desc": "镍基固溶强化+钨/铬强化。耐 900℃+。"
+  },
+  {
+   "id": "haber_ammonia_v2",
+   "name": "高压合成氨(升级)",
+   "inputs": {
+    "coal": 0.25,
+    "water": 0.5,
+    "electricity": 0.55
+   },
+   "outputs": {
+    "ammonia": 0.4
+   },
+   "desc": "教材：不锈钢耐压容器提高反应压力，单位电耗产氨更多。"
+  },
+  {
+   "id": "concentrate_rare",
+   "name": "独居石选矿",
+   "inputs": {
+    "monazite": 0.5,
+    "water": 0.3,
+    "electricity": 0.15
+   },
+   "outputs": {
+    "rare_concentrate": 0.3
+   },
+   "desc": "重选/磁选富集。教材：稀土矿多与重矿物伴生。"
+  },
+  {
+   "id": "extract_rare",
+   "name": "溶剂萃取分离稀土",
+   "inputs": {
+    "rare_concentrate": 0.2,
+    "sulfuric_acid": 0.15,
+    "kerosene": 0.06,
+    "electricity": 0.4
+   },
+   "outputs": {
+    "cerium": 0.08,
+    "lanthanum": 0.06,
+    "neodymium": 0.04
+   },
+   "desc": "教材：煤油稀释萃取剂，多级逆流分离性质相近的稀土。跨阶段依赖石化煤油。"
+  },
+  {
+   "id": "make_catalyst_v",
+   "name": "钒系催化剂制备",
+   "inputs": {
+    "vanadium": 0.03,
+    "cerium": 0.02,
+    "electricity": 0.2
+   },
+   "outputs": {
+    "catalyst_v": 0.03
+   },
+   "desc": "教材：SO2 接触氧化用 V2O5，催化剂选择性加快主反应。"
+  },
+  {
+   "id": "make_catalyst_cc",
+   "name": "稀土分子筛制备",
+   "inputs": {
+    "lanthanum": 0.04,
+    "neodymium": 0.02,
+    "electricity": 0.25
+   },
+   "outputs": {
+    "catalyst_cc": 0.03
+   },
+   "desc": "教材：催化裂化催化剂为稀土改性分子筛。"
+  },
+  {
+   "id": "sulfuric_contact_v2",
+   "name": "接触法硫酸(钒催化升级)",
+   "inputs": {
+    "sulfur": 0.12,
+    "water": 0.3,
+    "electricity": 0.25
+   },
+   "outputs": {
+    "sulfuric_acid": 0.38
+   },
+   "desc": "教材：V2O5 催化让同量硫磺转化率更高(本配方硫磺输入更省、酸更多)。"
+  },
+  {
+   "id": "petrol_crack_v2",
+   "name": "石油催化裂化(升级)",
+   "inputs": {
+    "petroleum": 0.35,
+    "electricity": 0.4
+   },
+   "outputs": {
+    "gasoline": 0.22,
+    "ethylene": 0.16
+   },
+   "byproducts": {
+    "crack_gas": 0.18
+   },
+   "desc": "教材：催化裂化在较低温度得更多汽油(对比热裂解)。"
+  },
+  {
+   "id": "smelt_silicon",
+   "name": "碳热还原制工业硅",
+   "inputs": {
+    "silica": 0.5,
+    "coke": 0.25,
+    "electricity": 2.2
+   },
+   "outputs": {
+    "silicon": 0.18
+   },
+   "desc": "教材：SiO2+2C → Si+2CO↑(电弧炉约2000℃)。得98-99%冶金级硅。"
+  },
+  {
+   "id": "make_hcl",
+   "name": "氯氢合成氯化氢",
+   "inputs": {
+    "chlorine": 0.2,
+    "hydrogen": 0.05,
+    "electricity": 0.1
+   },
+   "outputs": {
+    "hcl": 0.22
+   },
+   "desc": "教材：H2+Cl2 燃烧化合 → 2HCl。产物用水吸收为盐酸。"
+  },
+  {
+   "id": "make_tcs",
+   "name": "三氯氢硅合成",
+   "inputs": {
+    "silicon": 0.15,
+    "hcl": 0.3,
+    "electricity": 0.3
+   },
+   "outputs": {
+    "tcs": 0.18
+   },
+   "desc": "教材：Si+3HCl → SiHCl3+H2(约300℃流化床)。杂质留在固相。"
+  },
+  {
+   "id": "simens_deposit",
+   "name": "西门子法多晶硅沉积",
+   "inputs": {
+    "tcs": 0.12,
+    "hydrogen": 0.08,
+    "electricity": 0.6
+   },
+   "outputs": {
+    "polysilicon": 0.05
+   },
+   "desc": "教材：高纯 TCS 与 H2 在 1100℃ 硅芯上还原沉积，纯度达9N。"
+  }
+ ]
+}

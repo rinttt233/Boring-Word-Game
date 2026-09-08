@@ -1,0 +1,510 @@
+{
+ "_comment": "数据库恢复树：研究 = 从受损存储中恢复知识条目。条目恢复后临时有效，需消耗资源固化才永久；未固化条目会随时间或记忆崩溃丢失。unlocks_* 解锁配方/设施。",
+ "entries": [
+  {
+   "id": "db_coking",
+   "name": "煤焦化工艺包",
+   "desc": "煤干馏制焦炭：炼焦炉解锁。",
+   "cost": {
+    "electricity": 30.0,
+    "scrap_alloy": 5.0
+   },
+   "fixate_cost": {
+    "electricity": 15.0,
+    "scrap_alloy": 8.0
+   },
+   "duration": 10.0,
+   "temporary_ttl": 90.0,
+   "unlocks_facility": [
+    "cokery"
+   ]
+  },
+  {
+   "id": "db_blast_furnace",
+   "name": "高炉炼铁工艺包",
+   "desc": "焦炭+铁矿石+石灰石 → 生铁。",
+   "cost": {
+    "electricity": 50.0,
+    "coal": 30.0
+   },
+   "fixate_cost": {
+    "electricity": 25.0,
+    "scrap_alloy": 12.0
+   },
+   "duration": 15.0,
+   "temporary_ttl": 90.0,
+   "unlocks_facility": [
+    "blast_furnace"
+   ]
+  },
+  {
+   "id": "db_steel",
+   "name": "炼钢工艺包",
+   "desc": "生铁去碳成钢：高压力容器/结构的原料。",
+   "cost": {
+    "electricity": 60.0,
+    "pig_iron": 20.0
+   },
+   "fixate_cost": {
+    "electricity": 30.0,
+    "scrap_alloy": 15.0
+   },
+   "duration": 15.0,
+   "temporary_ttl": 90.0,
+   "unlocks_facility": [
+    "steel_mill"
+   ]
+  },
+  {
+   "id": "db_sulfuric",
+   "name": "接触法硫酸工艺包",
+   "desc": "硫磺→SO2→(钒催化)→SO3→硫酸。化工之母。",
+   "cost": {
+    "electricity": 80.0,
+    "scrap_alloy": 10.0,
+    "sulfur": 20.0
+   },
+   "fixate_cost": {
+    "electricity": 40.0,
+    "scrap_alloy": 18.0
+   },
+   "duration": 20.0,
+   "temporary_ttl": 90.0,
+   "unlocks_facility": [
+    "sulfuric_plant"
+   ]
+  },
+  {
+   "id": "db_ammonia",
+   "name": "哈伯-博施工艺包",
+   "desc": "氮氢合成氨：需高压容器(优质钢)。二战化工终极里程碑之一。",
+   "cost": {
+    "electricity": 120.0,
+    "steel": 15.0
+   },
+   "fixate_cost": {
+    "electricity": 60.0,
+    "scrap_alloy": 25.0
+   },
+   "duration": 25.0,
+   "temporary_ttl": 90.0,
+   "unlocks_facility": [
+    "ammonia_synth"
+   ]
+  },
+  {
+   "id": "db_chloralkali",
+   "name": "氯碱电解工艺包",
+   "desc": "盐+电→烧碱+氯。独立于重化工的电解分支。",
+   "cost": {
+    "electricity": 70.0,
+    "scrap_alloy": 8.0
+   },
+   "fixate_cost": {
+    "electricity": 35.0,
+    "scrap_alloy": 15.0
+   },
+   "duration": 18.0,
+   "temporary_ttl": 90.0,
+   "unlocks_facility": [
+    "chloralkali_cell"
+   ],
+   "optional": true
+  },
+  {
+   "id": "db_explosive",
+   "name": "炸药工艺包",
+   "desc": "硫酸+氨→硝酸→硝化炸药。需先固化硫酸与氨。",
+   "cost": {
+    "sulfuric_acid": 10.0,
+    "ammonia": 8.0,
+    "scrap_alloy": 12.0
+   },
+   "fixate_cost": {
+    "electricity": 45.0,
+    "scrap_alloy": 20.0
+   },
+   "duration": 20.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_sulfuric",
+    "db_ammonia"
+   ],
+   "unlocks_facility": [
+    "nitric_plant"
+   ],
+   "optional": true
+  },
+  {
+   "id": "db_petrol",
+   "name": "石油裂解工艺包",
+   "desc": "石油→乙烯+汽油。需要钢制裂解炉。",
+   "cost": {
+    "steel": 12.0,
+    "scrap_alloy": 10.0
+   },
+   "fixate_cost": {
+    "electricity": 50.0,
+    "scrap_alloy": 22.0
+   },
+   "duration": 22.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_steel"
+   ],
+   "unlocks_facility": [
+    "petrol_cracker"
+   ]
+  },
+  {
+   "id": "db_tar",
+   "name": "煤焦油化工工艺包",
+   "desc": "煤焦油分馏→苯/酚。煤化工延伸，合成材料的原料源。",
+   "cost": {
+    "electricity": 35.0,
+    "scrap_alloy": 6.0
+   },
+   "fixate_cost": {
+    "electricity": 18.0,
+    "scrap_alloy": 10.0
+   },
+   "duration": 12.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_coking"
+   ],
+   "unlocks_facility": [
+    "tar_tower"
+   ],
+   "optional": true
+  },
+  {
+   "id": "db_copper",
+   "name": "电解精铜工艺包",
+   "desc": "铜矿+硫酸+电→精铜。电气化基础。",
+   "cost": {
+    "electricity": 90.0,
+    "sulfuric_acid": 8.0
+   },
+   "fixate_cost": {
+    "electricity": 40.0,
+    "scrap_alloy": 16.0
+   },
+   "duration": 18.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_sulfuric"
+   ],
+   "unlocks_facility": [
+    "copper_refiner"
+   ]
+  },
+  {
+   "id": "db_aluminum",
+   "name": "霍尔电解炼铝工艺包",
+   "desc": "铝土矿+巨电→铝。耗电大户。",
+   "cost": {
+    "electricity": 150.0,
+    "steel": 10.0
+   },
+   "fixate_cost": {
+    "electricity": 70.0,
+    "scrap_alloy": 22.0
+   },
+   "duration": 22.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_copper"
+   ],
+   "unlocks_facility": [
+    "aluminum_smelter"
+   ],
+   "optional": true
+  },
+  {
+   "id": "db_cable",
+   "name": "电缆拉制工艺包",
+   "desc": "精铜→电缆，电网/电机升级。",
+   "cost": {
+    "electricity": 60.0,
+    "copper": 10.0
+   },
+   "fixate_cost": {
+    "electricity": 30.0,
+    "scrap_alloy": 12.0
+   },
+   "duration": 12.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_copper"
+   ],
+   "unlocks_facility": [
+    "cable_line"
+   ],
+   "optional": true
+  },
+  {
+   "id": "db_distill",
+   "name": "石油常压蒸馏工艺包",
+   "desc": "教材：石油分馏利用沸点不同分离(物理变化)。多馏分：汽油/煤油/柴油/重油。",
+   "cost": {
+    "electricity": 100.0,
+    "steel": 8.0
+   },
+   "fixate_cost": {
+    "electricity": 45.0,
+    "scrap_alloy": 18.0
+   },
+   "duration": 20.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_petrol"
+   ],
+   "unlocks_facility": [
+    "distill_tower"
+   ]
+  },
+  {
+   "id": "db_polymer",
+   "name": "乙烯加聚工艺包",
+   "desc": "教材：n CH2=CH2 → [-CH2-CH2-]n 加聚反应，聚乙烯塑料。",
+   "cost": {
+    "electricity": 80.0,
+    "ethylene": 12.0
+   },
+   "fixate_cost": {
+    "electricity": 35.0,
+    "scrap_alloy": 14.0
+   },
+   "duration": 16.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_petrol"
+   ],
+   "unlocks_facility": [
+    "polymer_plant"
+   ],
+   "optional": true
+  },
+  {
+   "id": "db_refractory",
+   "name": "耐火冶金工艺包",
+   "desc": "选矿富集+电弧炉熔炼：镍/铬/钨 精矿→金属。需巨电与焦炭。",
+   "cost": {
+    "electricity": 200.0,
+    "steel": 20.0,
+    "scrap_alloy": 15.0
+   },
+   "fixate_cost": {
+    "electricity": 80.0,
+    "scrap_alloy": 30.0
+   },
+   "duration": 28.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_steel"
+   ],
+   "unlocks_facility": [
+    "nickel_concentrator",
+    "chrome_concentrator",
+    "tungsten_concentrator",
+    "nickel_arc_furnace",
+    "chrome_arc_furnace",
+    "tungsten_arc_furnace"
+   ]
+  },
+  {
+   "id": "db_alloy",
+   "name": "合金化工艺包",
+   "desc": "不锈钢(Fe+Cr≥10.5%)/高温合金(镍基)。高压氨塔也靠它。",
+   "cost": {
+    "electricity": 150.0,
+    "steel": 15.0,
+    "nickel": 6.0
+   },
+   "fixate_cost": {
+    "electricity": 70.0,
+    "scrap_alloy": 35.0
+   },
+   "duration": 24.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_refractory"
+   ],
+   "unlocks_facility": [
+    "stainless_plant",
+    "superalloy_plant",
+    "ammonia_v2_plant"
+   ],
+   "optional": true
+  },
+  {
+   "id": "db_rare_earth",
+   "name": "稀土分离工艺包",
+   "desc": "独居石选矿+溶剂萃取分离：铈/镧/钕。依赖硫酸(酸浸)与煤油(萃取溶剂)。",
+   "cost": {
+    "electricity": 220.0,
+    "steel": 18.0,
+    "sulfuric_acid": 10.0
+   },
+   "fixate_cost": {
+    "electricity": 90.0,
+    "scrap_alloy": 40.0
+   },
+   "duration": 30.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_sulfuric",
+    "db_distill"
+   ],
+   "unlocks_facility": [
+    "rare_mill",
+    "solvent_extractor"
+   ]
+  },
+  {
+   "id": "db_rare_catalyst",
+   "name": "工业催化工艺包",
+   "desc": "钒系(V2O5 接触法)与分子筛(催化裂化)催化剂。教材：催化剂改变速率不消耗。",
+   "cost": {
+    "electricity": 180.0,
+    "cerium": 4.0,
+    "vanadium": 3.0
+   },
+   "fixate_cost": {
+    "electricity": 80.0,
+    "scrap_alloy": 30.0
+   },
+   "duration": 26.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_rare_earth",
+    "db_petrol"
+   ],
+   "unlocks_facility": [
+    "catalyst_v_line",
+    "catalyst_cc_line",
+    "sulfuric_v2_plant",
+    "cracker_v2_plant"
+   ],
+   "optional": true
+  },
+  {
+   "id": "db_silicon",
+   "name": "西门子法提硅工艺包",
+   "desc": "教材：粗硅氯化制 SiHCl3，CVD 氢还原沉积 9N 多晶硅——芯片/光伏基材。",
+   "cost": {
+    "electricity": 260.0,
+    "steel": 20.0,
+    "chlorine": 15.0
+   },
+   "fixate_cost": {
+    "electricity": 100.0,
+    "scrap_alloy": 45.0
+   },
+   "duration": 32.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_refractory",
+    "db_chloralkali"
+   ],
+   "unlocks_facility": [
+    "silicon_furnace",
+    "hcl_tower",
+    "tcs_reactor",
+    "silicon_plant"
+   ],
+   "optional": true
+  },
+  {
+   "id": "db_large_thermal",
+   "name": "大型热力发电工艺包",
+   "desc": "锅炉+汽轮机：固体/流体燃料大吞吐、高效率发电。",
+   "cost": {
+    "electricity": 120.0,
+    "steel": 12.0
+   },
+   "fixate_cost": {
+    "electricity": 50.0,
+    "scrap_alloy": 20.0
+   },
+   "duration": 22.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_steel"
+   ],
+   "unlocks_facility": [
+    "large_coal_plant",
+    "fluid_power_plant"
+   ],
+   "optional": true
+  },
+  {
+   "id": "db_csp",
+   "name": "光热发电工艺包",
+   "desc": "槽式聚光+储热：白天发电、随天气波动。",
+   "cost": {
+    "electricity": 90.0,
+    "copper": 6.0
+   },
+   "fixate_cost": {
+    "electricity": 40.0,
+    "scrap_alloy": 16.0
+   },
+   "duration": 18.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_copper"
+   ],
+   "unlocks_facility": [
+    "csp_plant"
+   ],
+   "optional": true
+  },
+  {
+   "id": "db_pv",
+   "name": "光伏发电工艺包",
+   "desc": "多晶硅光电池：半导体 pn 结光伏效应。晴天出力高，但沙暴下几乎归零。",
+   "cost": {
+    "electricity": 120.0,
+    "polysilicon": 3.0,
+    "copper": 6.0
+   },
+   "fixate_cost": {
+    "electricity": 55.0,
+    "scrap_alloy": 22.0
+   },
+   "duration": 24.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_silicon"
+   ],
+   "unlocks_facility": [
+    "solar_farm"
+   ],
+   "optional": true
+  },
+  {
+   "id": "db_wind",
+   "name": "风力发电工艺包",
+   "desc": "风力机：昼夜持续发电，沙暴/气流增强时反而升功率。",
+   "cost": {
+    "electricity": 80.0,
+    "steel": 8.0
+   },
+   "fixate_cost": {
+    "electricity": 35.0,
+    "scrap_alloy": 14.0
+   },
+   "duration": 16.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_steel"
+   ],
+   "unlocks_facility": [
+    "wind_farm"
+   ],
+   "optional": true
+  }
+ ]
+}

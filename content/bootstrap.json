@@ -1,0 +1,33 @@
+{
+  "_comment": "出生环境（bootstrap）：初始资源、执行单元、出生地块。WRECK1=坠毁船体残骸（回收合金/执行单元的早期来源）。",
+  "resources": {
+    "scrap_alloy": 40.0,
+    "coal": 60.0,
+    "water": 200.0
+  },
+  "units": [
+    {"name": "执行器-α"},
+    {"name": "执行器-β"},
+    {"name": "执行器-γ"}
+  ],
+  "plots": [
+    {
+      "id": "HOME", "ring": 0, "kind": "empty", "state": "claimed",
+      "desc": "坠毁点。ASI 核心就地重建，主基地位置。"
+    },
+    {
+      "id": "WRECK1", "ring": 0, "kind": "wreck", "substance": "scrap_alloy",
+      "grade": 55.0, "reserve": 180.0, "state": "known",
+      "desc": "坠毁船体主体残骸。回收合金，拆解完可能得到完整执行单元。"
+    },
+    {
+      "id": "RIVER", "ring": 0, "kind": "water", "state": "known",
+      "desc": "基地旁的河流。取水便利，水源近乎无限。"
+    },
+    {
+      "id": "IRON1", "ring": 0, "kind": "ore", "substance": "iron_ore",
+      "grade": 58.0, "reserve": 4200.0, "state": "known",
+      "desc": "地表赤铁矿露头，距基地极近。"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "_comment": "记忆劣化模型（M1-B）。max_integrity 从满值随时间劣化到 0；维护作业可恢复。",
+  "max_integrity": 100.0,
+  "degrade_per_sec": 0.02,
+  "warn_threshold": 30.0,
+  "crisis_threshold": 10.0,
+  "maintain": {
+    "name": "记忆加固",
+    "cost": {"electricity": 20.0, "scrap_alloy": 5.0},
+    "restore": 25.0,
+    "duration": 8.0,
+    "desc": "烧录冗余存储加固记忆。占用一个执行单元，消耗电与合金。"
+  }
+}

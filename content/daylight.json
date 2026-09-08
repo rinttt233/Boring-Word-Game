@@ -1,0 +1,6 @@
+{
+ "_comment": "昼夜循环（电力模块）。周期 60s：白天(日照) day 秒 → 黄昏过渡 dusk 秒 → 夜。solar effect ∈ [0,1] 供光热/光伏设施查询；phase 供 GUI 显示 ☀/☾。",
+ "period": 60.0,
+ "day": 32.0,
+ "dusk": 6.0
+}

@@ -1,0 +1,472 @@
+{
+ "_comment": "勘探区域表：ring → 该圈层可发现的地块概率池。勘探进度越深越远越稀有。wreck 权重随圈层升高：越深入越可能找到可回收执行单元的残骸。",
+ "surveys_per_ring": 3,
+ "regions": [
+  {
+   "ring": 1,
+   "name": "近郊丘陵带",
+   "pools": [
+    {
+     "kind": "ore",
+     "substance": "coal",
+     "weight": 40,
+     "grade": [
+      70,
+      88
+     ],
+     "reserve": [
+      2500,
+      8000
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "limestone",
+     "weight": 25,
+     "grade": [
+      90,
+      97
+     ],
+     "reserve": [
+      4000,
+      9000
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "iron_ore",
+     "weight": 15,
+     "grade": [
+      45,
+      60
+     ],
+     "reserve": [
+      1500,
+      4000
+     ]
+    },
+    {
+     "kind": "wreck",
+     "substance": "scrap_alloy",
+     "weight": 8,
+     "grade": [
+      40,
+      60
+     ],
+     "reserve": [
+      60,
+      150
+     ]
+    },
+    {
+     "kind": "empty",
+     "weight": 18
+    }
+   ]
+  },
+  {
+   "ring": 2,
+   "name": "干燥台地",
+   "pools": [
+    {
+     "kind": "ore",
+     "substance": "copper_ore",
+     "weight": 25,
+     "grade": [
+      1.2,
+      2.5
+     ],
+     "reserve": [
+      800,
+      2200
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "coal",
+     "weight": 20,
+     "grade": [
+      65,
+      85
+     ],
+     "reserve": [
+      2000,
+      6000
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "limestone",
+     "weight": 15,
+     "grade": [
+      88,
+      96
+     ],
+     "reserve": [
+      3000,
+      7000
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "iron_ore",
+     "weight": 10,
+     "grade": [
+      40,
+      58
+     ],
+     "reserve": [
+      1200,
+      3500
+     ]
+    },
+    {
+     "kind": "wreck",
+     "substance": "scrap_alloy",
+     "weight": 13,
+     "grade": [
+      40,
+      70
+     ],
+     "reserve": [
+      60,
+      180
+     ]
+    },
+    {
+     "kind": "empty",
+     "weight": 22
+    },
+    {
+     "kind": "ore",
+     "substance": "salt",
+     "weight": 12,
+     "grade": [
+      70,
+      90
+     ],
+     "reserve": [
+      1500,
+      4000
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "bauxite",
+     "weight": 6,
+     "grade": [
+      45,
+      65
+     ],
+     "reserve": [
+      1000,
+      2500
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "silica",
+     "weight": 9,
+     "grade": [
+      75,
+      95
+     ],
+     "reserve": [
+      2000,
+      5000
+     ]
+    }
+   ]
+  },
+  {
+   "ring": 3,
+   "name": "火山裂谷带",
+   "pools": [
+    {
+     "kind": "ore",
+     "substance": "sulfur",
+     "weight": 30,
+     "grade": [
+      90,
+      99
+     ],
+     "reserve": [
+      600,
+      2000
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "copper_ore",
+     "weight": 20,
+     "grade": [
+      1.5,
+      3.0
+     ],
+     "reserve": [
+      700,
+      1800
+     ]
+    },
+    {
+     "kind": "wreck",
+     "substance": "scrap_alloy",
+     "weight": 22,
+     "grade": [
+      40,
+      75
+     ],
+     "reserve": [
+      80,
+      220
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "iron_ore",
+     "weight": 10,
+     "grade": [
+      50,
+      62
+     ],
+     "reserve": [
+      1000,
+      3000
+     ]
+    },
+    {
+     "kind": "empty",
+     "weight": 24
+    },
+    {
+     "kind": "ore",
+     "substance": "petroleum",
+     "weight": 14,
+     "grade": [
+      55,
+      80
+     ],
+     "reserve": [
+      1200,
+      3500
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "bauxite",
+     "weight": 12,
+     "grade": [
+      50,
+      70
+     ],
+     "reserve": [
+      1500,
+      3500
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "nickel_ore",
+     "weight": 11,
+     "grade": [
+      1.5,
+      3.0
+     ],
+     "reserve": [
+      600,
+      1600
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "chrome_ore",
+     "weight": 9,
+     "grade": [
+      20,
+      40
+     ],
+     "reserve": [
+      700,
+      1800
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "tungsten_ore",
+     "weight": 5,
+     "grade": [
+      0.8,
+      2.0
+     ],
+     "reserve": [
+      300,
+      900
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "silica",
+     "weight": 8,
+     "grade": [
+      80,
+      96
+     ],
+     "reserve": [
+      2500,
+      6000
+     ]
+    }
+   ]
+  },
+  {
+   "ring": 4,
+   "name": "冻原边缘",
+   "pools": [
+    {
+     "kind": "wreck",
+     "substance": "scrap_alloy",
+     "weight": 28,
+     "grade": [
+      40,
+      80
+     ],
+     "reserve": [
+      100,
+      280
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "sulfur",
+     "weight": 15,
+     "grade": [
+      85,
+      99
+     ],
+     "reserve": [
+      500,
+      1500
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "coal",
+     "weight": 10,
+     "grade": [
+      70,
+      90
+     ],
+     "reserve": [
+      2000,
+      5000
+     ]
+    },
+    {
+     "kind": "empty",
+     "weight": 47
+    },
+    {
+     "kind": "ore",
+     "substance": "petroleum",
+     "weight": 10,
+     "grade": [
+      60,
+      85
+     ],
+     "reserve": [
+      1500,
+      4000
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "chrome_ore",
+     "weight": 8,
+     "grade": [
+      25,
+      45
+     ],
+     "reserve": [
+      800,
+      2000
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "tungsten_ore",
+     "weight": 5,
+     "grade": [
+      1.0,
+      2.5
+     ],
+     "reserve": [
+      350,
+      1000
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "monazite",
+     "weight": 6,
+     "grade": [
+      3,
+      8
+     ],
+     "reserve": [
+      400,
+      1200
+     ]
+    }
+   ]
+  },
+  {
+   "ring": 5,
+   "name": "永暗荒原",
+   "pools": [
+    {
+     "kind": "wreck",
+     "substance": "scrap_alloy",
+     "weight": 32,
+     "grade": [
+      50,
+      85
+     ],
+     "reserve": [
+      120,
+      320
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "sulfur",
+     "weight": 10,
+     "grade": [
+      90,
+      99
+     ],
+     "reserve": [
+      500,
+      1200
+     ]
+    },
+    {
+     "kind": "ore",
+     "substance": "monazite",
+     "weight": 8,
+     "grade": [
+      4,
+      10
+     ],
+     "reserve": [
+      500,
+      1500
+     ]
+    },
+    {
+     "kind": "empty",
+     "weight": 50
+    }
+   ]
+  }
+ ]
+}

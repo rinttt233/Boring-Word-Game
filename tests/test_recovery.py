@@ -47,7 +47,9 @@ def make_engine():
     eng.registry.register("memory", MemorySystem(MEM_CFG))
     eng.registry.register("recovery", RecoverySystem(ENTRIES))
     eng.registry.register("claim", ClaimSystem())
-    eng.registry.register("industry", IndustrySystem(FACS, RECIPES))
+    ind = IndustrySystem(FACS, RECIPES)
+    ind.instant_build = True          # 本文件测恢复/固化；建造耗时见 test_build_time
+    eng.registry.register("industry", ind)
     eng.start()
     return eng
 
@@ -144,6 +146,7 @@ class TestRecovery(unittest.TestCase):
         eng.registry.register("recovery", RecoverySystem(ENTRIES))
         eng.registry.register("claim", ClaimSystem())
         eng.registry.register("industry", IndustrySystem(FACS, RECIPES))
+        eng.registry.get("industry").instant_build = True   # 建造耗时另测
         eng.start()
         rec = eng.registry.get("recovery")
         rec.recover(eng, "db_coking")

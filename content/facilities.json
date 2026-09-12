@@ -707,6 +707,22 @@
    "requires_recovery": "db_wind",
    "desc": "风力机阵列：不分昼夜持续发电，沙暴时反而增强。",
    "build_time": 16
+  },
+  {
+   "id": "maintenance_depot",
+   "name": "维护站",
+   "allowed_plot_kinds": [
+    "empty"
+   ],
+   "build_cost": {
+    "scrap_alloy": 20.0,
+    "steel": 8.0
+   },
+   "recipe": "make_maintenance",
+   "slots": 1,
+   "requires_recovery": "db_upkeep",
+   "desc": "制造维护件的车间。恢复「设备维护」知识后，所有设施都开始消耗维护件。",
+   "build_time": 16
   }
  ]
 }

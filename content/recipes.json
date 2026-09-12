@@ -462,6 +462,18 @@
     "polysilicon": 0.05
    },
    "desc": "教材：高纯 TCS 与 H2 在 1100℃ 硅芯上还原沉积，纯度达9N。"
+  },
+  {
+   "id": "make_maintenance",
+   "name": "维护件制造",
+   "inputs": {
+    "steel": 0.05,
+    "scrap_alloy": 0.12
+   },
+   "outputs": {
+    "maintenance_kit": 0.3
+   },
+   "desc": "把钢与残骸合金加工成轴承/密封/滤芯。维持整座工厂的代价。"
   }
  ]
 }

@@ -42,11 +42,18 @@ class UnitsPanel(_RightPanel):
         self.lines.pack(side="top", anchor="nw", padx=6, pady=4)
 
     def refresh(self, engine, router):
-        rows = []
+        eff = float(getattr(engine.units, "efficiency", 1.0) or 1.0)
+        busy = sum(1 for u in engine.units.units if u.status == "busy")
+        head = (f"效能 ×{eff:.2f}  (在役 {len(engine.units.units)} · "
+                f"运转 {busy} · 空闲 {engine.units.count_idle()})")
+        if eff > 1.0001:
+            head += "\n  └ 产能与作业速度 ×%.2f（恢复的调度知识）" % eff
+        rows = [head, ""]
         for u in engine.units.units:
             t = f" → {u.task}" if u.task else ""
             rows.append(f"{u.id} {u.name:<8} {u.status}{t}")
-        self.lines.configure(text="\n".join(rows) or "（无单元）")
+        self.lines.configure(text="\n".join(rows) if len(rows) > 2
+                             else head + "\n（无单元）")
 
 
 class RecoveryPanel(Refreshable, Panel):

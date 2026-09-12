@@ -10,6 +10,7 @@ from main import build_engine
 eng = build_engine()
 eng.clock.resume()
 ind = eng.registry.get("industry")
+ind.instant_build = True     # 端点脚本聚焦产线数值；建造耗时见 tests/test_build_time.py
 rec = eng.registry.get("recovery")
 result = {}
 

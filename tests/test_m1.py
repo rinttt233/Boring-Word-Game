@@ -48,7 +48,9 @@ def make_engine():
              "grade": [80, 80], "reserve": [900, 900]}]}],
         "surveys_per_ring": 3}))
     eng.registry.register("claim", ClaimSystem())
-    eng.registry.register("industry", IndustrySystem(facs, recipes))
+    ind = IndustrySystem(facs, recipes)
+    ind.instant_build = True          # 本文件测生产闭环；建造耗时见 test_build_time
+    eng.registry.register("industry", ind)
     eng.start()
     return eng
 

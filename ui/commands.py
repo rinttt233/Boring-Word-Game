@@ -76,7 +76,7 @@ class CommandRouter:
         )
         self.engine.log(
             "工业: assign <设施> | unassign <设施> | units | resources "
-            "| undo (撤销上次建造) | status"
+            "| undo (撤销上次建造) | mothball <设施> [on|off] | status"
         )
         self.engine.log(
             "生存: maintain (记忆加固，防失忆) | memory | entries | "
@@ -98,7 +98,7 @@ class CommandRouter:
         self.engine.log(
             "调试: dbg res <资源> <量> | dbg mem <0-100> | dbg add <资源> <量>"
             " | dbg unit <n> | dbg unlock <条目|all> | dbg time <秒> |"
-            " dbg env <事件> | dbg degrade off"
+            " dbg env <事件> | dbg degrade off | dbg instant [on|off]"
         )
         self.engine.log(
             "快捷键: 空格=暂停/继续 | 任意键可随时打断时间流动输入指令"
@@ -138,14 +138,33 @@ class CommandRouter:
             return
         mc = mem.maintain_cfg
         cost = " ".join(f"{k}:{v:g}" for k, v in mc.get("cost", {}).items())
+        rate = mem.degrade_rate(self.engine) if hasattr(mem, "degrade_rate") \
+            else mem.degrade_per_sec
         self.engine.log(
             f"记忆完整度 {mem.integrity:.1f}% / {mem.max_integrity:.0f}% | "
-            f"劣化 {mem.degrade_per_sec:g}/s | 阈值告警 {mem.warn_threshold:.0f}%"
+            f"劣化 {rate:.3f}/s | 阈值告警 {mem.warn_threshold:.0f}%"
         )
         self.engine.log(
-            f"加固: 消耗 {cost}，恢复 {mc.get('restore', 0):g}% | "
-            f"{mc.get('desc', '')}"
+            f"加固: 消耗 {cost}，恢复 {mem.restore_amount():.0f}%"
+            f"（按完整度分档）| {mc.get('desc', '')}"
         )
+        maint = self.engine.registry.get("maintenance")
+        if maint is not None:
+            self.engine.log("[维护] " + maint.status_text(self.engine))
+
+    def _cmd_mothball(self, args):
+        """mothball <设施ID> [on|off] —— 封存/解除封存（零维护消耗）。"""
+        ind = self.engine.registry.get("industry")
+        if ind is None or not args:
+            self.engine.log("用法: mothball <设施ID> [on|off]")
+            return
+        fid = args[0]
+        on = True
+        if len(args) >= 2:
+            on = args[1].lower() not in ("off", "0", "false", "解封")
+        err = ind.mothball(self.engine, fid, on=on)
+        if err:
+            self.engine.log(f"[工业] {err}")
 
     def _cmd_entries(self, args):
         rec = self.engine.registry.get("recovery")
@@ -554,6 +573,7 @@ class CommandRouter:
           time <sec>              跳转游戏时间(有副作用,慎用)
           unlock <entry|all>      把恢复条目永久化(或全部)
           env <id>                强制切到指定环境事件
+          instant [on|off]        切换即时建造(不耗时不占执行单元)
         """
         if not args:
             self.engine.log("[调试] 用法见 dbg 帮助。")
@@ -623,6 +643,19 @@ class CommandRouter:
                 cur = env.current()
                 engine.log("[调试] 环境切至: "
                            + (cur.get("name", args[1]) if cur else args[1]))
+            elif sub == "instant":
+                ind = engine.registry.get("industry")
+                if ind is None:
+                    engine.log("[调试] 无工业模块。")
+                    return
+                if len(args) >= 2:
+                    ind.instant_build = args[1].lower() in ("on", "1", "true")
+                else:
+                    ind.instant_build = not ind.instant_build
+                engine.log("[调试] 即时建造 "
+                           + ("开启（不耗时不占单元）"
+                              if ind.instant_build else "关闭（正常施工耗时）")
+                           + "。")
             else:
                 self.engine.log("[调试] 未知子命令或参数不足，见 dbg 帮助。")
         except (ValueError, IndexError) as e:

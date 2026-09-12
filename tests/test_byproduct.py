@@ -31,7 +31,9 @@ def make_engine():
     eng.bootstrap_world([
         {"id": "H", "ring": 0, "kind": "empty", "state": "claimed"},
         {"id": "H2", "ring": 0, "kind": "empty", "state": "claimed"}])
-    eng.registry.register("industry", IndustrySystem(FACS, RECIPES, HEAT))
+    ind = IndustrySystem(FACS, RECIPES, HEAT)
+    ind.instant_build = True          # 本文件测副产物；建造耗时见 test_build_time
+    eng.registry.register("industry", ind)
     eng.start()
     return eng
 

@@ -226,13 +226,16 @@ class GuiUI:
         # 电力净值（缺电停摆是核心痛点 → 状态栏直接暴露）
         self.power_lbl = tk.Label(bar, text="电力 --", font=T.FONT_UI,
                                   fg=T.TEXT_SUB, bg=T.BG)
+        # 维护件（批次2b：恢复 db_upkeep 后才出现，缺供=设备状态下滑）
+        self.maint_lbl = tk.Label(bar, text="", font=T.FONT_UI,
+                                  fg=T.TEXT_SUB, bg=T.BG)
         self.day_lbl = tk.Label(bar, text="", font=T.FONT_UI,
                                 fg=T.TEXT_SUB, bg=T.BG)
         self.env_lbl = tk.Label(bar, text="", font=T.FONT_UI,
                                 fg=T.TEXT_DIM, bg=T.BG)
         for w in (self.time_lbl, self.speed_lbl, self.state_lbl,
                   self.mem_lbl, self.mem_bar, self.units_lbl,
-                  self.db_lbl, self.db_bar, self.power_lbl):
+                  self.db_lbl, self.db_bar, self.power_lbl, self.maint_lbl):
             w.pack(side="left", padx=(4, 6), pady=6)
         self.day_lbl.pack(side="right", padx=(0, 2), pady=6)
         self.env_lbl.pack(side="right", padx=10, pady=6)
@@ -1301,6 +1304,23 @@ class GuiUI:
                         bg=T.WARN_BG)
         else:
             self.power_lbl.configure(text="")
+        # 维护件（仅在恢复维护知识后显示；库存低于 60s 需求时告警配色）
+        maint = self.engine.registry.get("maintenance")
+        if maint is not None and maint.enabled(self.engine):
+            try:
+                avail = self.engine.economy.get(maint.kit)
+                demand = maint.demand_per_sec(self.engine)
+                worst = maint.worst_upkeep(self.engine)
+            except Exception:
+                avail, demand, worst = 0.0, 0.0, None
+            low = demand > 0 and avail < demand * maint.warn_kit_seconds
+            worst_txt = "" if worst is None else f" 设备{worst:.0f}"
+            self.maint_lbl.configure(
+                text=f"维护件 {avail:.1f} ({demand:.2f}/s){worst_txt}",
+                fg=T.WARN_FG if low else T.TEXT_SUB,
+                bg=T.WARN_BG if low else T.BG)
+        else:
+            self.maint_lbl.configure(text="")
 
 
 def gui_selftest(engine, sub_map) -> bool:

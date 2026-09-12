@@ -1,14 +1,36 @@
 {
-  "_comment": "记忆劣化模型（M1-B）。max_integrity 从满值随时间劣化到 0；维护作业可恢复。",
-  "max_integrity": 100.0,
-  "degrade_per_sec": 0.02,
-  "warn_threshold": 30.0,
-  "crisis_threshold": 10.0,
-  "maintain": {
-    "name": "记忆加固",
-    "cost": {"electricity": 20.0, "scrap_alloy": 5.0},
-    "restore": 25.0,
-    "duration": 8.0,
-    "desc": "烧录冗余存储加固记忆。占用一个执行单元，消耗电与合金。"
-  }
+ "_comment": "记忆劣化模型（批次2 起为**随规模增长的压力**）：degrade = degrade_per_sec + per_fixated_entry×已固化条目数 + per_running_facility×运转设施数。记得越多、工厂越大，维系记忆的单位成本越高；maintain 恢复量按完整度分档（越接近满值回报越低）。",
+ "max_integrity": 100.0,
+ "degrade_per_sec": 0.02,
+ "degrade_scale": {
+  "per_fixated_entry": 0.002,
+  "per_running_facility": 0.004,
+  "_comment": "基线 0.02/s（满值约 83 分钟归零）；12 条主线固化 + 12 台运转 ≈ 0.092/s（约 18 分钟归零）；终局 12 条 + 22 台 ≈ 0.132/s。"
+ },
+ "warn_threshold": 30.0,
+ "crisis_threshold": 10.0,
+ "maintain": {
+  "name": "记忆加固",
+  "cost": {
+   "electricity": 20.0,
+   "scrap_alloy": 5.0
+  },
+  "restore": 25.0,
+  "restore_tiers": [
+   {
+    "below": 40.0,
+    "restore": 32.0
+   },
+   {
+    "below": 70.0,
+    "restore": 25.0
+   },
+   {
+    "below": 100.1,
+    "restore": 16.0
+   }
+  ],
+  "duration": 8.0,
+  "desc": "烧录冗余存储加固记忆。占用一个执行单元，消耗电与合金。完整度越低越有效，接近满值时收益递减。"
+ }
 }

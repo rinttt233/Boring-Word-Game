@@ -108,6 +108,8 @@ class BuildingsPanel(Refreshable, Panel):
             ring = plot.ring if plot is not None else "?"
             return f"ring{ring}", f"圈{ring}"
         if mode == "status":
+            if f.under_construction:
+                return "building", f"{T.S_BUILD} 建造中"
             if f.stalled_reported:
                 return "stalled", f"{T.S_WARN} 停摆"
             if not f.assigned:
@@ -145,7 +147,8 @@ class BuildingsPanel(Refreshable, Panel):
         if idle <= 0:
             self.engine.log("[建筑] 没有空闲执行单元可补员。")
             return
-        targets = [f for f in ind.facilities.values() if not f.assigned]
+        targets = [f for f in ind.facilities.values()
+                   if not f.assigned and not f.under_construction]
         if not targets:
             self.engine.log("[建筑] 所有设施都已分配单元。")
             return
@@ -260,8 +263,19 @@ class BuildingsPanel(Refreshable, Panel):
             for f in sorted(groups[gk], key=lambda x: x.id):
                 units = ",".join(f.assigned) or "-"
                 stalled = ""
-                if f.stalled_reported:
+                if f.under_construction:
+                    left = ind.build_progress(self.engine, f.id)
+                    left_txt = f"{left:.0f}s" if left is not None else "…"
+                    stalled = f" {T.S_BUILD}建造中 {left_txt}"
+                elif f.mothballed:
+                    stalled = " ⏸封存"
+                elif f.halt_until > self.engine.clock.time:
+                    stalled = f" {T.S_WARN}{f.halt_reason or '停机'}"
+                elif f.stalled_reported:
                     stalled = f" {T.S_WARN}{f.stall_reason or '停摆'}"
+                elif f.upkeep < 75.0 and (self.engine.registry.get(
+                        "maintenance") is not None):
+                    stalled = f" 设备{f.upkeep:.0f}"
                 plot = self.engine.world.get(f.plot_id)
                 ring = f"圈{plot.ring}" if plot is not None else "?"
                 iid = self.tree.insert(
@@ -305,8 +319,33 @@ class BuildingsPanel(Refreshable, Panel):
             return
         d = ind.defs[f.def_id]
         parts = [f"{f.id} {f.name} @{f.plot_id}"]
+        if f.under_construction:
+            left = ind.build_progress(self.engine, f.id)
+            parts.append(f"{T.S_BUILD} 建造中"
+                         + (f"：剩余约 {left:.0f}s" if left is not None
+                            else "（施工单元就位）"))
+        if f.mothballed:
+            parts.append("⏸ 已封存：不运转、零维护消耗"
+                         "（解封需一个执行单元 + 重启时间）")
+        elif f.halt_until > self.engine.clock.time:
+            left = f.halt_until - self.engine.clock.time
+            parts.append(f"{T.S_WARN} {f.halt_reason or '停机'}："
+                         f"剩余约 {left:.0f}s")
+        maint = self.engine.registry.get("maintenance")
+        if maint is not None and maint.enabled(self.engine):
+            parts.append(f"设备状态 {f.upkeep:.0f}/100"
+                         f"（维护件 {maint.use_per_sec:g}/s"
+                         + ("；已停用" if not f.assigned else "") + "）")
         units = ",".join(f.assigned) or "无"
-        parts.append(f"已分配单元: {units}")
+        eff = float(getattr(self.engine.units, "efficiency", 1.0) or 1.0)
+        slots = int(d.get("slots", 1))
+        if eff > 1.0001:
+            sf = self.engine.units.staff_factor(len(f.assigned), slots)
+            parts.append(f"已分配单元: {units}  "
+                         f"〔效能 ×{eff:.2f} → 产能/节拍 ×{sf:.2f}，"
+                         f"满负荷需 {self.engine.units.effective_slots(slots)} 个〕")
+        else:
+            parts.append(f"已分配单元: {units}")
         if d.get("extract_rate"):
             parts.append(f"产出 {d['extract_rate']:g}/s "
                          f"(耗电 {d.get('power_use', 0):g}/s)")
@@ -362,6 +401,13 @@ class BuildingsPanel(Refreshable, Panel):
         if f.assigned:
             self._act_btn(row, "调离", lambda: self.router.execute(
                 f"unassign {self.selected}"))
+        # 封存/解封（批次2b：维护件供不上时的"先停一停"）
+        if f.mothballed:
+            self._act_btn(row, "解除封存", lambda: self.router.execute(
+                f"mothball {self.selected} off"))
+        else:
+            self._act_btn(row, "封存", lambda: self.router.execute(
+                f"mothball {self.selected}"))
         if d.get("kind") == "burner":
             # 按设施燃料类别白名单过滤（无白名单设施=全部可燃）
             if hasattr(ind, "fuel_options_for"):
@@ -436,7 +482,8 @@ class BuildingsPanel(Refreshable, Panel):
             return ()
         return tuple(sorted(
             (f.id, f.def_id, tuple(f.assigned), bool(f.stalled_reported),
-             f.fuel or "")
+             bool(f.under_construction), bool(f.mothballed),
+             f.halt_reason or "", round(float(f.upkeep), 1), f.fuel or "")
             for f in ind.facilities.values()))
 
     def _do_rebuild(self):

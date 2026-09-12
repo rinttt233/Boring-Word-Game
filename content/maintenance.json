@@ -1,0 +1,20 @@
+{
+ "_comment": "设备维护/待机消耗模型（批次2b）。恢复 db_upkeep 后生效：运转设施持续消耗维护件；缺供则设备状态 upkeep(0~100) 下滑，低于阈值按概率故障停机。封存设施完全不消耗，但重启需要时间与一个执行单元。",
+ "requires_recovery": "db_upkeep",
+ "kit": "maintenance_kit",
+ "use_per_sec": 0.01,
+ "idle_factor": 0.33,
+ "repair_per_sec": 0.5,
+ "neglect_decay_per_sec": 0.03,
+ "max_upkeep": 100.0,
+ "breakdown": {
+  "threshold": 75.0,
+  "max_chance_per_min": 0.5,
+  "downtime": 25.0,
+  "on_restart_upkeep": 40.0,
+  "_comment": "upkeep<75 起有故障概率，0 时约每分钟 50%；停机 25s 后抢修恢复至 40，仍处于易故障区间（与同类作品一致：不修就会反复故障）。"
+ },
+ "mothball_restart_sec": 10.0,
+ "warn_kit_seconds": 60.0,
+ "seed": 20260912
+}

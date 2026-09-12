@@ -50,7 +50,9 @@ def make_engine():
         {"id": "B2", "ring": 0, "kind": "empty", "state": "claimed"}])
     eng.registry.register("recovery", RecoverySystem(ENTRIES))
     eng.registry.register("claim", ClaimSystem())
-    eng.registry.register("industry", IndustrySystem(FACS, []))
+    ind = IndustrySystem(FACS, [])
+    ind.instant_build = True          # 本文件测恢复门控；建造耗时见 test_build_time
+    eng.registry.register("industry", ind)
     eng.start()
     return eng
 

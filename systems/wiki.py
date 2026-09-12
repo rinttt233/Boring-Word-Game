@@ -200,6 +200,13 @@ class WikiSystem:
             if e.get("unlocks_facility"):
                 lines.append("解锁：" + "、".join(
                     self._fac_name(x) for x in e["unlocks_facility"]))
+            grants = e.get("grants") or {}
+            if grants:
+                names = {"unit_efficiency": "单元效能"}
+                lines.append("效果：" + "、".join(
+                    f"{names.get(k, k)} +{float(v):g}"
+                    for k, v in grants.items())
+                    + "（恢复即可生效，条目丢失则失效）")
             lines.append("性质：" + ("可选分支（不影响通关迁移）"
                                      if e.get("optional") else "主线知识"))
             self._put(f"db:{eid}", e.get("name", eid), "科技",

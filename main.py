@@ -17,6 +17,7 @@ from systems.database import DatabaseSystem
 from systems.daylight import DaylightSystem
 from systems.environment import EnvironmentSystem
 from systems.industry import IndustrySystem
+from systems.maintenance import MaintenanceSystem
 from systems.memory import MemorySystem
 from systems.recovery import RecoverySystem
 from systems.survey import SurveySystem
@@ -54,11 +55,16 @@ def build_engine() -> Engine:
     heat = {s["id"]: s["heat_value"] for s in subs if s.get("heat_value")}
     fuel_cls = {s["id"]: s["fuel_class"] for s in subs
                 if s.get("fuel_class")}
+    maint = load_json("maintenance.json")
     engine.registry.register(
         "industry",
         IndustrySystem(load_json("facilities.json")["facilities"],
                        load_json("recipes.json")["recipes"],
-                       heat_values=heat, fuel_classes=fuel_cls))
+                       heat_values=heat, fuel_classes=fuel_cls,
+                       mothball_restart_sec=float(
+                           maint.get("mothball_restart_sec", 10.0))))
+    # 设备维护（批次2b）：恢复 db_upkeep 后，设施开始持续消耗维护件
+    engine.registry.register("maintenance", MaintenanceSystem(maint))
     engine.registry.register(
         "database",
         DatabaseSystem(load_json("database.json")["projects"]))

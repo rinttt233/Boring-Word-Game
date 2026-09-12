@@ -505,6 +505,111 @@
     "wind_farm"
    ],
    "optional": true
+  },
+  {
+   "id": "db_unit_bus",
+   "name": "执行单元总线复用工艺包",
+   "desc": "把执行单元从「一事一单元」改为分时复用：同一单元更懂自己该干什么。单元效能 +0.25（产能与作业速度同增）。",
+   "cost": {
+    "electricity": 40.0,
+    "scrap_alloy": 10.0
+   },
+   "fixate_cost": {
+    "electricity": 20.0,
+    "scrap_alloy": 10.0
+   },
+   "duration": 12.0,
+   "temporary_ttl": 90.0,
+   "grants": {
+    "unit_efficiency": 0.25
+   }},
+  {
+   "id": "db_unit_prefetch",
+   "name": "指令预取与流水调度工艺包",
+   "desc": "在执行单元动作之前预取下一条指令，减少空转等待。单元效能 +0.25。",
+   "cost": {
+    "electricity": 60.0,
+    "copper": 10.0
+   },
+   "fixate_cost": {
+    "electricity": 30.0,
+    "scrap_alloy": 12.0
+   },
+   "duration": 14.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_unit_bus"
+   ],
+   "grants": {
+    "unit_efficiency": 0.25
+   },
+   "optional": true
+  },
+  {
+   "id": "db_unit_parallel",
+   "name": "并行作业编排工艺包",
+   "desc": "同一执行单元同时协调多条产线的节拍，产能显著提高。单元效能 +0.5。",
+   "cost": {
+    "electricity": 90.0,
+    "steel": 6.0
+   },
+   "fixate_cost": {
+    "electricity": 40.0,
+    "steel": 4.0
+   },
+   "duration": 16.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_unit_bus",
+    "db_steel"
+   ],
+   "grants": {
+    "unit_efficiency": 0.5
+   }},
+  {
+   "id": "db_unit_autonomy",
+   "name": "单元自主决策工艺包",
+   "desc": "执行单元获得本地判断力，无需中央逐步下令即可闭环作业。单元效能 +0.5。",
+   "cost": {
+    "electricity": 150.0,
+    "steel": 10.0,
+    "copper": 8.0
+   },
+   "fixate_cost": {
+    "electricity": 60.0,
+    "steel": 6.0
+   },
+   "duration": 18.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_unit_parallel",
+    "db_rare_catalyst"
+   ],
+   "grants": {
+    "unit_efficiency": 0.5
+   },
+   "optional": true
+  },
+  {
+   "id": "db_upkeep",
+   "name": "设备维护与检修工艺包",
+   "desc": "恢复出的不只是图纸，还有代价：设施开始需要维护件。运转设施持续消耗维护件，缺供则设备状态下滑、故障停机。",
+   "cost": {
+    "electricity": 70.0,
+    "steel": 6.0
+   },
+   "fixate_cost": {
+    "electricity": 35.0,
+    "scrap_alloy": 15.0
+   },
+   "duration": 16.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_steel"
+   ],
+   "unlocks_facility": [
+    "maintenance_depot"
+   ]
   }
  ]
 }

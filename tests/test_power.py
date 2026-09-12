@@ -49,9 +49,9 @@ def make_engine():
     eng.bootstrap_world([
         {"id": "HOME", "ring": 0, "kind": "empty", "state": "claimed"}])
     eng.registry.register("recovery", RecoverySystem([]))
-    eng.registry.register("industry",
-                          IndustrySystem(FACS, [], heat_values=HEAT,
-                                         fuel_classes=FUEL_CLS))
+    ind = IndustrySystem(FACS, [], heat_values=HEAT, fuel_classes=FUEL_CLS)
+    ind.instant_build = True          # 本文件测电力数值；建造耗时见 test_build_time
+    eng.registry.register("industry", ind)
     eng.registry.register("environment", EnvironmentSystem(ENV_CFG, seed=3))
     eng.registry.register("daylight", DaylightSystem(DL_CFG))
     eng.start()

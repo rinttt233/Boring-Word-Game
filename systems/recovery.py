@@ -11,6 +11,8 @@
 """
 from typing import Dict, List, Optional
 
+from core.stats import bump as stat_bump
+
 
 class RecoverySystem:
     def __init__(self, entries: List[dict]) -> None:
@@ -23,6 +25,7 @@ class RecoverySystem:
         self._engine = engine
         engine.bus.on("job_done", self._on_job_done)
         engine.bus.on("memory_crash", self._on_memory_crash)
+        self._sync_efficiency()
 
     # ---- 门控查询 ---------------------------------------------------
     def is_unlocked(self, entry_id: str) -> bool:
@@ -31,6 +34,43 @@ class RecoverySystem:
     def entry_list(self) -> List[dict]:
         return [dict(e, state=self.status.get(e["id"], "locked"))
                 for e in self.entries.values()]
+
+    # ---- 知识加成（批次1：效率科技）--------------------------------
+    def grant_total(self, key: str) -> float:
+        """汇总所有可用条目（active/permanent）在某加成键上的数值。
+
+        临时恢复的条目即生效 —— 与"unlocks_facility 只需恢复不需固化"
+        的既有语义一致；条目丢失（记忆崩溃/超时）加成同步消失。
+        """
+        total = 0.0
+        for eid, e in self.entries.items():
+            if self.status.get(eid) in ("active", "permanent"):
+                grants = e.get("grants") or {}
+                total += float(grants.get(key, 0.0))
+        return total
+
+    def unit_efficiency(self) -> float:
+        """单元效能 = 1.0 + Σ grants.unit_efficiency。"""
+        return 1.0 + self.grant_total("unit_efficiency")
+
+    def _eff(self, engine: object) -> float:
+        """当前单元效能（engine.units 上同步后的值；无则退回 1.0）。"""
+        return float(getattr(engine.units, "efficiency", 1.0) or 1.0)
+
+    def _sync_efficiency(self) -> None:
+        """把知识加成同步到 UnitPool（状态变化时调用，不必每 tick 计算）。"""
+        eng = getattr(self, "_engine", None)
+        if eng is None:
+            return
+        target = self.unit_efficiency()
+        old = float(getattr(eng.units, "efficiency", 1.0) or 1.0)
+        if abs(old - target) < 1e-9:
+            return
+        eng.units.set_efficiency(target)
+        arrow = "提升" if target > old else "下降"
+        eng.log(f"[单元] 调度知识{arrow}：单元效能 ×{old:.2f} → ×{target:.2f}"
+                f"（产能与作业速度随之{'提高' if target > old else '回落'}）。",
+                level="normal" if target > old else "warn", category="unit")
 
     # ---- 指令 -------------------------------------------------------
     def recover(self, engine: object, entry_id: str) -> Optional[str]:
@@ -60,7 +100,7 @@ class RecoverySystem:
             for rid, amt in cost.items():
                 engine.economy.add(rid, float(amt))
             return "没有空闲执行单元执行恢复作业。"
-        dur = float(e.get("duration", 10.0))
+        dur = float(e.get("duration", 10.0)) / max(self._eff(engine), 1e-9)
         engine.jobs.add("recover", unit.id, entry_id, dur,
                         {"entry": entry_id})
         engine.log(f"[数据库] 恢复作业开始：{e['name']}"
@@ -86,7 +126,7 @@ class RecoverySystem:
             for rid, amt in cost.items():
                 engine.economy.add(rid, float(amt))
             return "没有空闲执行单元执行固化作业。"
-        dur = 6.0
+        dur = 6.0 / max(self._eff(engine), 1e-9)
         engine.jobs.add("fixate", unit.id, entry_id, dur,
                         {"entry": entry_id})
         engine.log(f"[数据库] 烧录固化开始：{e['name']}（{dur:.0f}s）。")
@@ -105,14 +145,17 @@ class RecoverySystem:
             self.status[entry_id] = "active"
             ttl = float(e.get("temporary_ttl", 90.0))
             self.active_until[entry_id] = self._engine.clock.time + ttl
+            stat_bump(self._engine, "recovered")
             self._engine.log(
                 f"[数据库] {e['name']} 已恢复 —— 临时可用 {ttl:.0f}s，"
                 "速速 fixate 固化或趁热使用！")
         else:
             self.status[entry_id] = "permanent"
             self.active_until.pop(entry_id, None)
+            stat_bump(self._engine, "fixated")
             self._engine.log(f"[数据库] {e['name']} 已永久固化。"
                              "从此不再因记忆崩溃丢失。")
+        self._sync_efficiency()
 
     # ---- 记忆崩溃：所有未固化条目丢失 -------------------------------
     def _on_memory_crash(self, payload: dict) -> None:
@@ -126,6 +169,7 @@ class RecoverySystem:
         names = "、".join(self.entries[eid]["name"] for eid in lost)
         self._engine.log(f"[数据库] 记忆崩溃！未固化条目已丢失：{names}。"
                          "已固化条目安然无恙。")
+        self._sync_efficiency()
 
     # ---- 每 tick：检查临时条目过期 ----------------------------------
     def tick(self, engine: object, dt: float) -> None:
@@ -138,6 +182,8 @@ class RecoverySystem:
             self.active_until.pop(eid, None)
             engine.log(f"[数据库] 条目「{self.entries[eid]['name']}」"
                        "未及时固化，已从易失存储中丢失。")
+        if expired:
+            self._sync_efficiency()
 
     # ---- 存档 -------------------------------------------------------
     def to_dict(self) -> dict:
@@ -150,3 +196,4 @@ class RecoverySystem:
             self.status.setdefault(eid, "locked")
         self.active_until = {
             k: float(v) for k, v in data.get("active_until", {}).items()}
+        self._sync_efficiency()

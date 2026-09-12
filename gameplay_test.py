@@ -40,10 +40,17 @@ def main():
     assert eng.units.count() == 3, "出生应 3 单元"
     assert eng.world.get("WRECK1") is not None, "出生应有残骸可回收"
 
-    # 2) HOME 建发电站并分配单元
+    # 2) HOME 建发电站（**建造耗时作业**：占单元→完工→再分配）
+    ind = eng.registry.get("industry")
+    assert ind.instant_build is False, "真实玩法应采用建造耗时"
     cmd(ui, "build HOME power_plant")
+    assert len(ind.facilities) == 1
+    f1 = ind.facilities["F1"]
+    assert f1.under_construction, "开工后设施应处于建造中"
+    assert ind.assign(eng, "F1") is not None, "建造中不应允许分配单元"
+    assert tick_until(eng, lambda: not f1.under_construction, max_s=60), \
+        "建造作业应完成"
     cmd(ui, "assign F1")
-    assert len(eng.registry.get("industry").facilities) == 1
 
     # 3) 勘探圈1（初始煤库存有限，需找煤矿）
     cmd(ui, "survey 1")
@@ -59,11 +66,15 @@ def main():
     tick_until(eng, lambda: eng.world.get("IRON1").state == "claimed",
                max_s=60)
     cmd(ui, "build IRON1 extractor")
+    assert tick_until(eng, lambda: not ind.facilities["F2"]
+                      .under_construction, max_s=60), "采矿机应建成"
     cmd(ui, "assign F2")
     cmd(ui, "claim WRECK1")
     tick_until(eng, lambda: eng.world.get("WRECK1").state == "claimed",
                max_s=60)
     cmd(ui, "build WRECK1 salvager")
+    assert tick_until(eng, lambda: not ind.facilities["F3"]
+                      .under_construction, max_s=60), "回收站应建成"
     cmd(ui, "assign F3")
     # 三单元全部占满 → 不能再去占领别处（调度张力）
     cmd(ui, "claim RIVER")
@@ -91,9 +102,12 @@ def main():
     wid = [p.id for p in eng2.world.plots.values() if p.kind == "wreck"][-1]
     ind2 = eng2.registry.get("industry")
     eng2.economy.set("electricity", 1000)
-    ind2.build(eng2, wid, "salvager")
-    # 调度：从采铁设施抽调一个单元去干回收（体现有限单元取舍）
+    # 调度：先从采铁设施抽调一个单元（建造作业要占用单元）
     ind2.unassign(eng2, "F2")
+    err = ind2.build(eng2, wid, "salvager")
+    assert err is None, err
+    assert tick_until(eng2, lambda: not ind2.facilities["F4"]
+                      .under_construction, max_s=60), "回收站应建成"
     ind2.assign(eng2, "F4")
     n0 = eng2.units.count()
     tick_until(eng2, lambda: eng2.world.get(wid).state == "depleted",

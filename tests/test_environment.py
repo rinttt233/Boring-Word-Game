@@ -52,7 +52,9 @@ def make_engine(with_env=True, with_recovery=True):
     if with_recovery:
         eng.registry.register("recovery", RecoverySystem([]))
     eng.registry.register("claim", ClaimSystem())
-    eng.registry.register("industry", IndustrySystem(FACS, RECIPES))
+    ind = IndustrySystem(FACS, RECIPES)
+    ind.instant_build = True          # 本文件测环境倍率；建造耗时见 test_build_time
+    eng.registry.register("industry", ind)
     if with_env:
         eng.registry.register("environment", EnvironmentSystem(ENV_CFG, seed=7))
     eng.start()

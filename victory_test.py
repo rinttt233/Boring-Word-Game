@@ -80,6 +80,7 @@ def fixate_when_possible(eng, rec, entry, label):
 def main():
     eng = build_engine()
     ind = eng.registry.get("industry")
+    ind.instant_build = True     # 端点脚本聚焦产线数值；建造耗时见 tests/test_build_time.py
     rec = eng.registry.get("recovery")
     db = eng.registry.get("database")
     mem = eng.registry.get("memory")
@@ -121,6 +122,20 @@ def main():
         build_when_possible(eng, ind, spawn_claimed(eng, "empty"), fac,
                             label=fac)
 
+    # ---- 设备维护（db_upkeep 非可选，批次2b）----------------------
+    # 恢复出"机械会磨损"这件事之后，所有设施开始消耗维护件；
+    # 先建维护站把维护件产起来，否则设备状态下滑 → 故障停机。
+    recover_when_possible(eng, rec, "db_upkeep", "db_upkeep")
+    fixate_when_possible(eng, rec, "db_upkeep", "fix:db_upkeep")
+    build_when_possible(eng, ind, spawn_claimed(eng, "empty"),
+                        "maintenance_depot", label="maintenance_depot")
+    maint = eng.registry.get("maintenance")
+    assert maint is not None and maint.enabled(eng), "维护体系应已启用"
+    run_until(eng, lambda: eng.economy.get("maintenance_kit") > 5.0,
+              max_s=1200, label="产维护件")
+    print("  维护件产出:", round(eng.economy.get("maintenance_kit"), 2),
+          "| 需求/s:", round(maint.demand_per_sec(eng), 3))
+
     # 电网扩容：裂解炉/蒸馏塔/电解精铜都是电老虎，玩家需加建电站。
     for _ in range(3):
         build_when_possible(eng, ind, spawn_claimed(eng, "empty"),
@@ -158,6 +173,14 @@ def main():
                         "solvent_extractor", label="solvent")
     run_until(eng, lambda: eng.economy.get("cerium") > 1,
               max_s=1500, label="产铈")
+
+    # ---- 主线：调度知识（db_unit_bus / db_unit_parallel 非可选）------
+    # 批次1 起"效率科技"纳入主线：单元效能提升产能与作业速度。
+    for entry in ("db_unit_bus", "db_unit_parallel"):
+        recover_when_possible(eng, rec, entry, entry)
+        fixate_when_possible(eng, rec, entry, f"fix:{entry}")
+    assert eng.units.efficiency >= 1.75, \
+        f"主线调度知识应把效能推到 ≥1.75，当前 {eng.units.efficiency}"
     # 萃取线吃硫酸，先撤下单元让酸池攒给数据库工程（玩家取舍）
     for f in list(ind.facilities.values()):
         if f.def_id == "solvent_extractor":

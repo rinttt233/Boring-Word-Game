@@ -241,11 +241,27 @@ def suggest_actions(engine, router=None, limit: int = 5) -> List[dict]:
     idle = engine.units.count_idle()
     unknown = [p for p in engine.world.plots.values() if p.state == "unknown"]
 
+    def _is_power(f) -> bool:
+        d = ind.defs.get(f.def_id, {})
+        return (d.get("kind") in ("burner", "renewable")
+                or "electricity" in ind.recipes.get(
+                    d.get("recipe", ""), {}).get("outputs", {}))
+
+    def _burns_coal(f) -> bool:
+        d = ind.defs.get(f.def_id, {})
+        if d.get("kind") == "burner":
+            return True
+        return "coal" in ind.recipes.get(d.get("recipe", ""),
+                                         {}).get("inputs", {})
+
+    def _free_empty():
+        return next((p for p in engine.world.plots.values()
+                     if p.state in ("claimed", "developed", "depleted")
+                     and p.kind == "empty"
+                     and not any(f.plot_id == p.id for f in facs)), None)
+
     # 1) 还没电：第一优先
-    has_power = any(ind.defs[f.def_id].get("kind") in ("burner", "renewable")
-                    or "electricity" in ind.recipes.get(
-                        ind.defs[f.def_id].get("recipe", ""), {}).get("outputs", {})
-                    for f in facs if not f.under_construction)
+    has_power = any(_is_power(f) for f in facs if not f.under_construction)
     if not has_power:
         home = engine.world.get("HOME")
         if home is not None and home.state == "claimed":
@@ -255,6 +271,20 @@ def suggest_actions(engine, router=None, limit: int = 5) -> List[dict]:
             add("assign F1", "发电站已建好但没派单元，它不会运转")
         elif home is not None and home.state in ("known", "unknown"):
             add("claim HOME", "先把 HOME 占下来才能建电站")
+
+    # 1.5) 电力节流：电量够、煤快没了 → 先停一台烧煤电站省煤（要用电再 assign）
+    #      （盲测阶段机实测：早期煤只有 60t 时，这一手能把"150 秒断煤"变成悠闲找矿）
+    if has_power:
+        stored = engine.economy.get("electricity")
+        coal_now = engine.economy.get("coal")
+        if coal_now < 200 and stored > 120:
+            burners = [f for f in facs
+                       if f.assigned and not f.under_construction
+                       and not f.mothballed and _is_power(f) and _burns_coal(f)]
+            if burners:
+                add(f"unassign {burners[0].id}",
+                    f"电量已存 {stored:.0f}kWh 而煤只剩 {coal_now:.0f}："
+                    f"先停「{burners[0].name}」省煤，缺电时再 assign")
 
     # 2) 施工中：等完工
     building = [f for f in facs if f.under_construction]
@@ -299,7 +329,7 @@ def suggest_actions(engine, router=None, limit: int = 5) -> List[dict]:
             else:
                 add("", f"{f.name} 没有可用燃料", "库存里没有该类可燃物")
 
-    # 5) 能源/原料告急 → 找矿
+    # 6) 能源/原料告急 → 找矿
     coal = engine.economy.get("coal")
     if coal < 120 and any(p.substance == "coal" for p in engine.world.plots.values()):
         targets = [p for p in engine.world.plots.values()
@@ -314,6 +344,24 @@ def suggest_actions(engine, router=None, limit: int = 5) -> List[dict]:
             add(f"claim {targets[0].id}",
                 f"煤只剩 {coal:.0f}（电站 0.4/s 会烧完），占领煤矿",
                 "" if idle > 0 else "需要 1 个空闲执行单元")
+
+    # 6.5) 合金告急：残骸回收站**免建造费**，是建造与固化材料的主来源
+    scrap = engine.economy.get("scrap_alloy")
+    if scrap < 40:
+        wrecks = [p for p in engine.world.plots.values()
+                  if p.kind == "wreck" and p.reserve > 0
+                  and not any(f.plot_id == p.id for f in facs)]
+        claimed_w = [p for p in wrecks
+                     if p.state in ("claimed", "developed", "depleted")]
+        known_w = [p for p in wrecks if p.state == "known"]
+        if claimed_w:
+            add(f"build {claimed_w[0].id} salvager",
+                f"合金只剩 {scrap:.0f}（建造/固化都要它）：回收站免建造费，"
+                "先拆残骸", _unit_block(idle))
+        elif known_w:
+            add(f"claim {known_w[0].id}",
+                f"合金只剩 {scrap:.0f}：占领残骸地块后回收（拆完还可能返还一个单元）",
+                _unit_block(idle))
 
     # 6) 记忆告急（没有空闲单元时，先腾一个出来）
     if mem is not None and not getattr(mem, "_degradation_disabled", False) \
@@ -356,10 +404,16 @@ def suggest_actions(engine, router=None, limit: int = 5) -> List[dict]:
                 continue                     # 前置未固化，先做前置
             cost = e.get("cost", {})
             miss = _missing(engine, cost, router)
+            # 恢复只是"临时可用"（约 90s）：固化材料没凑齐就先别 recover，
+            # 否则窗口一过条目照样丢、材料白烧。
+            fix_miss = _missing(engine, e.get("fixate_cost", {}), router)
+            warn = (f"｜固化还需 {fix_miss}：先攒够再 recover（临时窗口只有 90s）"
+                    if not miss and fix_miss else "")
             add(f"recover {eid}", f"可恢复知识「{e.get('name', eid)}」"
                                   + (f"（解锁 {'、'.join(e.get('unlocks_facility', []))}）"
                                      if e.get("unlocks_facility") else
-                                     "（提升单元效能）" if e.get("grants") else ""),
+                                     "（提升单元效能）" if e.get("grants") else "")
+                                  + warn,
                 miss or _unit_block(idle))
 
     # 8) 建造已解锁但还没建的设施
@@ -386,6 +440,21 @@ def suggest_actions(engine, router=None, limit: int = 5) -> List[dict]:
                 _missing(engine, d.get("build_cost", {}), router)
                 or _unit_block(idle))
             break
+
+    # 8.5) 执行单元是核心瓶颈：钢有富余而单元还少 → 建「执行单元装配厂」扩产
+    if idle > 0 and rec is not None \
+            and rec.status.get("db_units") == "permanent" \
+            and not any(f.def_id == "unit_factory" for f in facs):
+        total_u = engine.units.count()
+        steel_now = engine.economy.get("steel")
+        if total_u < 12 and steel_now > 60:
+            empty = _free_empty()
+            if empty is not None:
+                add(f"build {empty.id} unit_factory",
+                    f"只有 {total_u} 个执行单元而钢有 {steel_now:.0f}：装配厂把钢+铜"
+                    "变成「能同时开更多产线」",
+                    _missing(engine, ind.defs["unit_factory"].get("build_cost", {}),
+                             router) or _unit_block(idle))
 
     # 9) 维护件
     if maint is not None and maint.enabled(engine):
@@ -515,7 +584,10 @@ class CoverageTracker:
     def update(self, report: dict) -> None:
         scope = {"r": report, "any": any, "all": all, "len": len, "sum": sum,
                  "min": min, "max": max, "sorted": sorted, "set": set,
-                 "float": float, "int": int, "str": str, "abs": abs}
+                 "float": float, "int": int, "str": str, "abs": abs,
+                 # bool 必须给：清单里有 `bool(r.get('database')) and ...` 这类断言，
+                 # 缺了会让该条目永远判不通过（且被 except 静默吞掉）。
+                 "bool": bool, "list": list, "dict": dict, "round": round}
         for it in self.items:
             if self.done.get(it["id"]):
                 continue

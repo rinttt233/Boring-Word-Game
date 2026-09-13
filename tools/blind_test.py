@@ -27,6 +27,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 import main                                       # noqa: E402
+from tools.ladder_policy import LadderPolicy      # noqa: E402
 from ui.agent_api import (CoverageTracker, build_report,   # noqa: E402
                           suggest_actions)
 from ui.commands import CommandRouter             # noqa: E402
@@ -53,6 +54,7 @@ class BlindRun:
         self.eng = main.build_engine(seed=seed)
         self.router = CommandRouter(self.eng, load_subs())
         self.tracker = CoverageTracker()
+        self.ladder = LadderPolicy() if policy == "ladder" else None
         self.history = []
         self._skip = {}
 
@@ -71,7 +73,11 @@ class BlindRun:
         before = len(self.eng.log_lines)
         self.router.execute(cmd)
         new = self.eng.log_lines[before:]
-        bad = any(("参数错误" in l) or ("未知指令" in l) for l in new)
+        # 判定"命令被拒"要覆盖业务错误（材料不足/没有空闲单元/尚未占领…），
+        # 否则策略会把失败当成功，反复重试同一条指令并饿死后面的步骤。
+        bad_words = ("参数错误", "未知指令", "不足", "没有空闲", "尚未",
+                     "已被占领", "不存在", "无法", "只能", "已满")
+        bad = any(any(w in l for w in bad_words) for l in new)
         if self.verbose:
             tag = "✗" if bad else "✓"
             print(f"   {tag} {cmd}"
@@ -120,6 +126,33 @@ class BlindRun:
                     outcome = "idle"
                     break
                 last_sig = self.signature(rep)
+                continue
+            if self.ladder is not None:
+                # 目标驱动阶段机：自己保证不重复下无效指令
+                act = self.ladder.next_action(rep)
+                if act is None:
+                    self.advance(300)
+                    continue
+                cmd, why = act["cmd"], act["why"]
+                decisions += 1
+                if cmd.startswith("@tick"):
+                    self.advance(float(cmd.split()[1]))
+                else:
+                    ok = self.exe(cmd)
+                    self.ladder.note_result(cmd, ok)
+                    self.advance(10)
+                self.history.append((round(self.eng.clock.time, 1), cmd, why))
+                # 兜底：最近 8 步只有 ≤2 种指令 → 原地打转，强制走一段
+                tail = [c for _t, c, _w in self.history[-8:]]
+                if len(tail) >= 8 and len(set(tail)) <= 2:
+                    self.advance(120)
+                new_sig = self.signature(build_report(self.eng, self.router))
+                if new_sig != last_sig:
+                    last_sig = new_sig
+                    last_change = self.eng.clock.time
+                else:
+                    self.plateau = max(getattr(self, "plateau", 0.0),
+                                       self.eng.clock.time - last_change)
                 continue
             sugs = [s for s in suggest_actions(self.eng, self.router, limit=12)
                     if s["cmd"] and not s["blocked"]]
@@ -178,6 +211,8 @@ class BlindRun:
             "plateau_minutes": round(getattr(self, "plateau", 0.0) / 60.0, 1),
             "wall": round(time.time() - started, 1),
             "history_tail": self.history[-12:],
+            "policy_log": (self.ladder.log[-30:] if self.ladder is not None
+                           else []),
         }
 
 
@@ -186,11 +221,13 @@ def main_cli() -> int:
     ap.add_argument("--runs", type=int, default=1)
     ap.add_argument("--seed-base", type=int, default=100)
     ap.add_argument("--policy", default="suggest",
-                    choices=("suggest", "random", "none"))
+                    choices=("suggest", "ladder", "random", "none"))
     ap.add_argument("--max-minutes", type=float, default=600)
     ap.add_argument("--stuck-seconds", type=float, default=900)
     ap.add_argument("--out", default="", help="汇总写入 Markdown 文件")
     ap.add_argument("--verbose", action="store_true")
+    ap.add_argument("--assert-victory", action="store_true",
+                    help="任一局未通关则以非 0 退出（供回归/CI 用）")
     args = ap.parse_args()
 
     results = []
@@ -235,6 +272,10 @@ def main_cli() -> int:
             print(f"  未通关示例（seed={stuck[0]['seed']}）最后几步：")
             for t, cmd, why in stuck[0]["history_tail"][-6:]:
                 print(f"    [{fmt_time(t)}] {cmd}   ← {why}")
+            if stuck[0].get("policy_log"):
+                print("  阶段机最后决策：")
+                for line in stuck[0]["policy_log"][-8:]:
+                    print(f"    {line}")
 
     if args.out:
         path = args.out if os.path.isabs(args.out) else os.path.join(ROOT, args.out)
@@ -256,6 +297,9 @@ def main_cli() -> int:
                 f.write(f"- seed {r['seed']}："
                         + ("、".join(r["coverage_missing"]) or "（全覆盖）") + "\n")
         print(f"  汇总已写入 {os.path.relpath(path, ROOT)}")
+    if args.assert_victory and len(wins) != len(results):
+        print(f"  [assert-victory] 未全部通关：{len(wins)}/{len(results)}")
+        return 1
     return 0
 
 

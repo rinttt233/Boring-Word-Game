@@ -84,6 +84,7 @@ def render_markdown(g: dict) -> str:
     out.append("| `tools/agent_play.py` | 试玩回路（文件协议，AI 推荐入口） |")
     out.append("| `tools/play_report.py` | 把 `saves/ai_samples.csv` 出成遥测报告 |")
     out.append("| `tools/blind_test.py` | 按策略自动盲玩并汇总（覆盖度/卡点） |")
+    out.append("| `tools/ladder_policy.py` | 阶梯策略（`--policy ladder`，可公平通关的参照玩家） |")
     out.append("| `tools/screenshot.ps1` | 截取游戏窗口为 PNG（需看图能力） |")
     out.append("| `content/wiki/*.json` | 游戏内百科原文（`wiki` 命令可查） |")
     out.append("| `content/guide.json` | 本文件的内容源 |")

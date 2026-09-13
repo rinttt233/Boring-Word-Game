@@ -42,6 +42,8 @@ python -X utf8 tools/agent_play.py            # 试玩回路：命令走 saves/a
 python -X utf8 tools/agent_play.py --gui      # 同上但开真窗口（可配合截图）
 python -X utf8 main.py --seed 123             # 固定随机种子（勘探/环境/故障可复现）
 python -X utf8 tools/blind_test.py --runs 3   # 按策略自动盲玩，出覆盖度/用时/停摆汇总
+python -X utf8 tools/blind_test.py --policy ladder --runs 20 --assert-victory
+                                              # 只用文档化接口的阶梯策略：20/20 公平通关（未通关返回非 0）
 python -X utf8 tools/play_report.py           # 把 saves/ai_samples.csv 出成遥测报告
 ```
 
@@ -88,7 +90,7 @@ python -X utf8 tools/play_report.py           # 把 saves/ai_samples.csv 出成�
 ## 测试
 
 ```bash
-python -X utf8 -m unittest discover -s tests   # 单元测试（当前 130+）
+python -X utf8 -m unittest discover -s tests   # 单元测试（当前 193 例）
 python -X utf8 main.py --gui-selftest           # GUI 自检
 python -X utf8 smoke_test.py                    # 集成冒烟
 python -X utf8 gameplay_test.py                 # M1 玩法闭环（真实 content，含真实施工耗时）
@@ -96,6 +98,8 @@ python -X utf8 chain_test.py                    # M2 真实工艺链端到端
 python -X utf8 tlb/tlc/tld/tle_test.py          # TL-B~E 各阶段端到端
 python -X utf8 power_test.py                    # 电力体系端到端
 python -X utf8 victory_test.py                  # M3 完整通关：数据库竣工→劣化终止
+python -X utf8 tools/blind_test.py --policy ladder --runs 20 --assert-victory
+                                                # M4 阶梯策略公平通关（未通关返回非 0）
 python -X utf8 balance_probe.py                 # M4 平衡探针
 python -X utf8 tools/cost_audit.py --write      # 基线测量 → docs/baseline_report.md
 ```
@@ -106,7 +110,8 @@ python -X utf8 tools/cost_audit.py --write      # 基线测量 → docs/baseline
 |---|---|
 | `AGENTS.md` | **AI 试玩入口**（由 `content/guide.json` 生成） |
 | `tools/agent_play.py` | 试玩回路（文件协议，AI/脚本逐回合下命令） |
-| `tools/blind_test.py` | 盲玩自动化（覆盖度/用时/停摆汇总） |
+| `tools/blind_test.py` | 盲玩自动化（覆盖度/用时/停摆汇总 + `--policy ladder` 公平通关基线） |
+| `tools/ladder_policy.py` | 阶梯策略：只用文档化接口的参照玩家（20/20 通关） |
 | `tools/play_report.py` | 遥测报告（曲线、停摆占比、单元利用率） |
 | `tools/cost_audit.py` | 成本/容量基线测量（只读） |
 | `tools/make_guide.py` | 从 `content/guide.json` 生成 `AGENTS.md` |

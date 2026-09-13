@@ -16,7 +16,8 @@ from core.stats import bump as stat_bump
 
 class RecoverySystem:
     def __init__(self, entries: List[dict],
-                 default_ttl: float = 180.0) -> None:
+                 default_ttl: float = 180.0,
+                 unit_bonus: Optional[dict] = None) -> None:
         self.entries: Dict[str, dict] = {e["id"]: e for e in entries}
         # status: locked / active / permanent
         self.status: Dict[str, str] = {eid: "locked" for eid in self.entries}
@@ -27,8 +28,10 @@ class RecoverySystem:
         # 注意：**排队不冻结窗口** —— 临时窗口照常流逝，压力还在。
         self.queued: List[str] = []
         self._warned = set()             # 已发过「即将过期」告警的条目
-        # 主线固化进度奖励（P1 ②b2）：每 2 条主线 +1 单元，上限 6
-        self.unit_bonus_cap = 6
+        # 主线固化进度奖励（P1 ②b2；§11 起上限 6 → 10，且从 content 读，不再写死）
+        ub = unit_bonus or {}
+        self.unit_bonus_per = max(1, int(ub.get("per_mainline", 2)))
+        self.unit_bonus_cap = max(0, int(ub.get("cap", 10)))
         self._unit_bonus_granted = 0
 
     def start(self, engine: object) -> None:
@@ -121,7 +124,8 @@ class RecoverySystem:
         n_main = sum(1 for eid, st in self.status.items()
                      if st == "permanent"
                      and not self.entries.get(eid, {}).get("optional"))
-        want = min(int(getattr(self, "unit_bonus_cap", 6)), n_main // 2)
+        per = max(1, int(getattr(self, "unit_bonus_per", 2)))
+        want = min(int(getattr(self, "unit_bonus_cap", 10)), n_main // per)
         while self._unit_bonus_granted < want:
             self._unit_bonus_granted += 1
             u = eng.units.add_unit("执行器-知识")

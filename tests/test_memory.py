@@ -55,7 +55,8 @@ class TestMemoryDecay(unittest.TestCase):
     def test_warning_logged_once(self):
         eng = make_engine()
         run_ticks(eng, 71)     # 掉到 ~29%
-        warns = [l for l in eng.log_lines if "低于阈值" in l]
+        # §8 起改为多级预警（文案带档位名）：warn 档只应出现一次
+        warns = [l for l in eng.log_lines if "（warn）" in l]
         self.assertEqual(len(warns), 1)
 
     def test_maintain_restores(self):

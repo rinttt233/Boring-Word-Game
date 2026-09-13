@@ -224,6 +224,13 @@ def build_report(engine, router=None) -> dict:
             "degrade_rated": round(mem.degrade_rate(engine), 4),
             "warn": mem.warn_threshold, "crisis": mem.crisis_threshold,
             "disabled": bool(getattr(mem, "_degradation_disabled", False)),
+            # §8 多级预警：ok/watch/warn/crisis/critical + 还有多少秒归零
+            "level": (mem.warn_level(engine)
+                      if hasattr(mem, "warn_level") else "ok"),
+            "seconds_to_crash": (lambda s: None if s == float("inf")
+                                 else round(s, 1))(
+                mem.seconds_to_crash(engine)
+                if hasattr(mem, "seconds_to_crash") else float("inf")),
         } if mem else None),
         "units": {
             "total": engine.units.count(),
@@ -334,6 +341,21 @@ def suggest_actions(engine, router=None, limit: int = 5) -> List[dict]:
                      if p.state in ("claimed", "developed", "depleted")
                      and p.kind == "empty"
                      and not any(f.plot_id == p.id for f in facs)), None)
+
+    # 0.5) 记忆临界（试玩提案 §8：维持现状，但预警要硬到能一眼看见）
+    if mem is not None and not getattr(mem, "_degradation_disabled", False) \
+            and hasattr(mem, "warn_level"):
+        lvl = mem.warn_level(engine)
+        if lvl in ("crisis", "critical"):
+            secs = (mem.seconds_to_crash(engine)
+                    if hasattr(mem, "seconds_to_crash") else None)
+            txt = ""
+            if secs is not None and secs != float("inf"):
+                txt = f"（约 {secs / 60:.0f} 分钟后归零）"
+            add("maintain" if idle > 0 else "",
+                f"⚠ 记忆 {mem.integrity:.0f}%{txt}：崩溃会丢掉**所有未固化条目**"
+                f"（级别 {lvl}）—— 先 maintain，再谈别的",
+                "" if idle > 0 else "需要 1 个空闲执行单元（先 unassign/mothball 腾一个）")
 
     # 0) BUG-5：临时条目即将过期 → 最高优先级，先保住知识
     if rec is not None and hasattr(rec, "expires_in"):

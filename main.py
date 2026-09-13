@@ -54,7 +54,8 @@ def build_engine(seed=None) -> Engine:
         "recovery",
         RecoverySystem(_rec_cfg["entries"],
                        default_ttl=_rec_cfg.get("temporary_ttl_default",
-                                                180.0)))
+                                                180.0),
+                       unit_bonus=_rec_cfg.get("unit_bonus")))
     engine.registry.register("survey",
                              SurveySystem(load_json("regions.json"), seed=seed))
     engine.registry.register("claim", ClaimSystem())

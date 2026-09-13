@@ -637,5 +637,10 @@
    ]
   }
  ],
- "temporary_ttl_default": 180.0
+ "temporary_ttl_default": 180.0,
+ "unit_bonus": {
+  "_comment": "主线固化奖励（P1 ②b2 / §11 提升上限）：每永久固化 per_mainline 条主线条目 +1 执行单元，上限 cap。",
+  "per_mainline": 2,
+  "cap": 10
+ }
 }

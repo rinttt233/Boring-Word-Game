@@ -37,6 +37,9 @@ class MemorySystem:
         self.integrity = self.max_integrity
         self._warned = False
         self._crisis_logged = False
+        # 多级预警（试玩提案 §8，用户定"维持现状 + 强化预警"）：
+        # 记录已经报过的档位，只在**跨档**时刷一次，回来的路上逐级重置。
+        self._levels_hit = set()
         self._crashed = False
         self._degradation_disabled = False
         self._last_rate = self.degrade_per_sec
@@ -108,6 +111,9 @@ class MemorySystem:
         rate = self.degrade_rate(engine)
         self._note_rate(engine, rate)
         self.integrity = max(0.0, self.integrity - rate * dt * mmul)
+        # 多级预警（§8）要在安全区判定**之前**跑：60% 的"提前备料"提醒也属于预警，
+        # 否则刚过 30% 才第一次出声，留给玩家的时间太少。
+        self._warn_levels(engine, rate * mmul)
         if self.integrity > self.warn_threshold:
             # 回到安全区，重置报警状态
             self._warned = False
@@ -121,17 +127,61 @@ class MemorySystem:
             engine.log("[记忆] 记忆崩溃！存储介质失效，正在进行灾难恢复。",
                        level="danger", category="memory")
             engine.bus.emit("memory_crash", {"integrity": 0.0})
-        elif self.integrity <= self.crisis_threshold \
+            return
+        if self.integrity <= self.crisis_threshold \
                 and not self._crisis_logged:
             self._crisis_logged = True
-            engine.log(
-                "[记忆] 严重警告：存储介质崩溃临界 —— 已恢复条目将开始丢失。"
-                "立即执行 maintain 加固。", level="danger", category="memory")
         elif not self._warned:
             self._warned = True
-            engine.log(
-                f"[记忆] 警告：记忆完整度 {self.integrity:.0f}% 低于阈值，"
-                "数据库条目存在丢失风险。", level="warn", category="memory")
+
+    # ---- 多级预警（§8）---------------------------------------------
+    def seconds_to_crash(self, engine: object) -> float:
+        """按当前劣化速率，完整度归零还有多少游戏秒（判断该不该马上加固）。"""
+        rate = self.degrade_rate(engine)
+        if rate <= 0:
+            return float("inf")
+        return max(0.0, self.integrity / rate)
+
+    def warn_level(self, engine: object) -> str:
+        """当前预警档：ok / watch / warn / crisis / critical。
+
+        同时看**完整度**与**距离归零的秒数**：劣化很快时，12% 也该算危机。
+        """
+        secs = self.seconds_to_crash(engine)
+        if self.integrity <= 8.0 or secs < 120:
+            return "critical"
+        if self.integrity <= 15.0 or secs < 300:
+            return "crisis"
+        if self.integrity <= self.warn_threshold:
+            return "warn"
+        if self.integrity <= 60.0:
+            return "watch"
+        return "ok"
+
+    def _warn_levels(self, engine: object, rate: float) -> None:
+        """跨档预警：每档只报一次，并带上"还有多少秒崩溃"这个可操作数字。"""
+        from core.stats import bump as _bump          # noqa: F401
+        secs = self.integrity / rate if rate > 0 else float("inf")
+        # 档位：60% 只是提醒，30/15/8% 逐级加重（8% 已接近必崩）
+        levels = ((8.0, "critical", "danger",
+                   "**8% 以下**：下一次 maintain 都未必来得及 —— "
+                   "立刻停掉其他作业、把电与单元全给 maintain"),
+                  (15.0, "crisis", "danger",
+                   "**15% 以下**：再撑不到几分钟，马上 maintain（占 1 单元 + 20 电）"),
+                  (30.0, "warn", "warn",
+                   "已进入警告区：安排一次 maintain，并优先固化在用的条目"),
+                  (60.0, "watch", "normal",
+                   "建议提前攒好 maintain 的电（20）与合金（5）"))
+        for below, key, level, advice in levels:
+            if self.integrity <= below and key not in self._levels_hit:
+                self._levels_hit.add(key)
+                engine.log(
+                    f"[记忆] {self.integrity:.0f}%（{key}）· 按当前劣化 "
+                    f"{rate:.3f}/s，约 {secs / 60:.0f} 分钟后归零 —— {advice}。",
+                    level=level, category="memory")
+        for below, key, _l, _a in levels:
+            if self.integrity > below:
+                self._levels_hit.discard(key)
 
     # ---- 指令 ------------------------------------------------------
     def maintain(self, engine: object) -> Optional[str]:

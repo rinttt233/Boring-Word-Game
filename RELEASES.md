@@ -64,6 +64,17 @@ python -X utf8 tools/make_release_notes.py --version 1.3.1
 > `$env:HTTPS_PROXY=http://127.0.0.1:8443` 并用 `git -c http.sslBackend=openssl push`。
 > `gh release create` 若带附件失败会回滚整个 Release —— **先建 Release，再单独 `gh release upload`**。
 
+## 历史重写记录
+
+**2026-09-13 —— 移除 AI 试玩报告**
+- 目的：两份 AI 试玩报告（`AI-playtest-report.txt` / `AI-playtest-code-analysis.txt`）只作本地留档，
+  不再出现在仓库的任何提交里。
+- 手段：`git filter-branch --index-filter "git rm --cached --ignore-unmatch <两文件>" --tag-name-filter cat -- --all`
+  → 删除 `refs/original` → `reflog expire --expire=now --all` → `gc --prune=now` → 强推 `main` 与 `v1.3.1`。
+- 影响：`main` 与 `v1.3.1` 的提交 SHA 全部变化（`v1.2` / `v1.3` 未受影响）；**旧克隆必须重新 clone**
+  （不要 `git pull`）。Release 附件不受影响（附件按标签名关联，已复核三份 zip 的 sha256 未变）。
+- 回滚备份：`_refactor_backup/history_purge_<时间戳>/all_refs.bundle`（含重写前全部引用，本地留档）。
+
 ## 发布新版本（本项目约定）
 
 ```bash

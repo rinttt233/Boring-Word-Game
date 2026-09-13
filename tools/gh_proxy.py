@@ -15,15 +15,18 @@ import sys
 import threading
 import time
 
-# 已实测 443 可达的 GitHub 前置 IP
+# 只映射**确实被 hosts 屏蔽**的名字（解析成 127.0.0.1 的）。
+# 未被屏蔽的名字（例如 uploads.github.com → 20.205.243.161）不要写进来，
+# 交给系统 DNS —— 写错 IP 会被 GitHub 前置返回 403。
 MAP = {
     "github.com": ["140.82.113.4", "140.82.112.4", "20.205.243.166"],
     "www.github.com": ["140.82.113.4", "140.82.112.4"],
     "api.github.com": ["140.82.113.6", "140.82.112.6"],
     "codeload.github.com": ["140.82.113.9", "140.82.112.9"],
-    "uploads.github.com": ["140.82.113.9", "140.82.112.9"],
     "objects.githubusercontent.com": ["185.199.108.133"],
     "raw.githubusercontent.com": ["185.199.108.133", "185.199.109.133"],
+    "camo.githubusercontent.com": ["185.199.108.133"],
+    "cloud.githubusercontent.com": ["185.199.108.133"],
 }
 LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saves",
                    "_proxy.log")

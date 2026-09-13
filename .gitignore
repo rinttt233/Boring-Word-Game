@@ -8,3 +8,7 @@ _refactor_backup/
 # Python 缂撳瓨
 __pycache__/
 *.pyc
+
+# 发布产物（Release 附件用的 zip / 说明）
+dist/
+

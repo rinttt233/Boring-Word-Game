@@ -9,6 +9,9 @@ _refactor_backup/
 __pycache__/
 *.pyc
 
-# �������Release �����õ� zip / ˵����
+# 发布产物（Release 附件用的 zip / 说明）
 dist/
 
+# 仅本地留档：AI 试玩报告（不进仓库，也不进 Release 快照）
+AI-playtest-report.txt
+AI-playtest-code-analysis.txt

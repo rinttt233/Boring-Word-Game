@@ -27,6 +27,8 @@ import zipfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKIP_DIRS = {"saves", "__pycache__", ".git", "releases", "_refactor_backup",
              "dist"}
+# 仅本地留档、不随仓库/Release 分发的文件（本地文件不会被删除）
+EXCLUDE_FILES = {"AI-playtest-report.txt", "AI-playtest-code-analysis.txt"}
 HEADER = """# 坠毁 ASI · 拓荒日志 —— v{version}
 
 科幻文字经营游戏：你是坠落到类地行星的受损 ASI，在**记忆持续劣化**中开采、扩张、
@@ -43,17 +45,19 @@ HEADER = """# 坠毁 ASI · 拓荒日志 —— v{version}
   python -X utf8 main.py              # 纯终端
   python -X utf8 main.py --seed 123   # 固定随机种子（可复现同一局）
   ```
-- 想交给 AI 玩？入口是仓库里的 **`AGENTS.md`**（由 `content/guide.json` 生成，和游戏内
-  `guide` 命令同源），配套 `tools/agent_play.py`（试玩回路）与游戏内
-  `report` / `suggest` / `cover` 接口。
-
-## 版本列表
+{ai_section}## 版本列表
 见 [RELEASES.md](https://github.com/rinttt233/Boring-Word-Game/blob/main/RELEASES.md)；
 完整更新历史见 [CHANGELOG.md](https://github.com/rinttt233/Boring-Word-Game/blob/main/CHANGELOG.md)。
 
 ---
 
 ## 更新报告（摘自 CHANGELOG）
+
+"""
+
+AI_SECTION = """- 想交给 AI 玩？入口是仓库里的 **`AGENTS.md`**（由 `content/guide.json` 生成，和游戏内
+  `guide` 命令同源），配套 `tools/agent_play.py`（试玩回路）与游戏内
+  `report` / `suggest` / `cover` 接口。
 
 """
 
@@ -66,7 +70,7 @@ def make_zip(version: str, snapshot: str, out_dir: str) -> str:
         for base, dirs, files in os.walk(snapshot):
             dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
             for fn in sorted(files):
-                if fn.endswith(".pyc"):
+                if fn.endswith(".pyc") or fn in EXCLUDE_FILES:
                     continue
                 fp = os.path.join(base, fn)
                 rel = os.path.relpath(fp, snapshot).replace("\\", "/")
@@ -77,7 +81,8 @@ def make_zip(version: str, snapshot: str, out_dir: str) -> str:
     return path
 
 
-def make_notes(version: str, out_dir: str) -> str:
+def make_notes(version: str, out_dir: str, has_agent: bool = True,
+               snapshot_ok: bool = True) -> str:
     with io.open(os.path.join(ROOT, "CHANGELOG.md"), encoding="utf-8") as f:
         text = f.read()
     m = re.search(rf"^## v{re.escape(version)}\b.*?(?=^## |\Z)", text,
@@ -86,11 +91,17 @@ def make_notes(version: str, out_dir: str) -> str:
     # Release 页不需要这两行（归档/快照是本地目录）
     section = "\n".join(l for l in section.splitlines()
                         if not l.startswith(("**归档**", "**发布快照**")))
+    if not snapshot_ok:
+        section = (f"> 注意：本地缺少 `releases/v{version}/` 快照，"
+                   "本次未附可运行 zip（源码包可用）。\n\n" + section)
     path = os.path.join(out_dir, f"release-notes-v{version}.md")
     with io.open(path, "w", encoding="utf-8", newline="\r\n") as f:
-        f.write(HEADER.format(version=version) + section + "\n")
+        f.write(HEADER.format(version=version,
+                              ai_section=AI_SECTION if has_agent else "")
+                + section + "\n")
     print(f"[release] notes: {os.path.relpath(path, ROOT)}"
-          f"（{len(section.splitlines())} 行更新报告）")
+          f"（{len(section.splitlines())} 行更新报告"
+          + ("，含 AI 试玩入口" if has_agent else "") + "）")
     return path
 
 
@@ -104,9 +115,12 @@ def main() -> int:
     snapshot = args.snapshot or os.path.join(ROOT, "releases",
                                              f"v{args.version}")
     os.makedirs(args.out, exist_ok=True)
-    make_notes(args.version, args.out)
+    has_snapshot = os.path.isdir(snapshot)
+    has_agent = os.path.isfile(os.path.join(snapshot, "AGENTS.md"))
+    make_notes(args.version, args.out, has_agent=has_agent,
+               snapshot_ok=has_snapshot or args.no_zip)
     if not args.no_zip:
-        if not os.path.isdir(snapshot):
+        if not has_snapshot:
             print(f"[release] 快照不存在，跳过打包: {snapshot}")
             return 1
         make_zip(args.version, snapshot, args.out)

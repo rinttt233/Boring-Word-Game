@@ -11,6 +11,7 @@ git 正常校验 github.com 的证书。不改系统 hosts、不需要管理员�
 import argparse
 import os
 import socket
+import ssl
 import sys
 import threading
 import time
@@ -44,8 +45,50 @@ def log(msg: str) -> None:
             pass
 
 
+def probe(host: str, ip: str, port: int = 443, timeout: float = 6.0) -> bool:
+    """健康探测：TCP + TLS 握手 + 发一个 HEAD 并读到响应。
+
+    只做 TCP 测试是不够的 —— GitHub 有多个边缘 IP，其中一些会接受连接、
+    随后在 TLS 阶段直接断开；不筛掉它们就会出现随机的
+    `OpenSSL SSL_read: unexpected eof`。
+    """
+    try:
+        ctx = ssl.create_default_context()
+        with socket.create_connection((ip, port), timeout=timeout) as raw:
+            with ctx.wrap_socket(raw, server_hostname=host) as tls:
+                tls.settimeout(timeout)
+                tls.sendall(f"HEAD / HTTP/1.1\r\nHost: {host}\r\n"
+                            "Connection: close\r\n\r\n".encode())
+                return bool(tls.recv(64))
+    except Exception:                          # noqa: BLE001
+        return False
+
+
+_ORDER: dict = {}
+_order_lock = threading.Lock()
+
+
+def ranked_ips(host: str):
+    """按健康探测结果排序的候选 IP（结果粘性缓存，避免每次连接都探测）。"""
+    with _order_lock:
+        cached = _ORDER.get(host)
+    if cached:
+        return cached
+    cands = MAP.get(host.lower())
+    if not cands:
+        return None
+    good = [ip for ip in cands if probe(host, ip)]
+    if not good:
+        log(f"探测 {host}: 全部候选不可用，退回原始顺序 {cands}")
+        good = list(cands)
+    log(f"探测 {host}: 可用 {good}")
+    with _order_lock:
+        _ORDER[host] = good
+    return good
+
+
 def dial(host: str, port: int) -> socket.socket:
-    ips = MAP.get(host.lower())
+    ips = ranked_ips(host) if port == 443 else None
     if ips:
         last = None
         for ip in ips:
@@ -56,6 +99,8 @@ def dial(host: str, port: int) -> socket.socket:
             except OSError as e:
                 last = e
                 log(f"dial {host}:{port} -> {ip} 失败: {e}")
+                with _order_lock:                # 剔除坏 IP，下次换下一个
+                    _ORDER[host] = [x for x in ips if x != ip] or list(ips)
         raise OSError(f"所有映射 IP 均失败: {last}")
     s = socket.create_connection((host, port), timeout=15)   # 兜底：系统解析
     log(f"dial {host}:{port} -> 系统解析 OK")

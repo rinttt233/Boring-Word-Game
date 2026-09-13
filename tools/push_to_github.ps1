@@ -69,15 +69,27 @@ if ($Create) {
     gh repo create $Repo --public --source=. --remote=origin 2>&1 | Write-Output
 }
 
-# --- push ------------------------------------------------------------------
+# --- push (with retry: the proxied path can hit transient TLS resets) --------
 $pushTarget = if ($token) { "https://x-access-token:$token@github.com/$Repo.git" } else { "origin" }
 $forceArg = @()
 if ($Force) { $forceArg = @("--force-with-lease") }
 
+function Invoke-Push([string[]]$args2) {
+    for ($i = 1; $i -le 4; $i++) {
+        Write-Output ("[push] attempt " + $i + "/4: git push " + ($args2 -join " "))
+        git push $pushTarget @args2
+        if ($LASTEXITCODE -eq 0) { return $true }
+        Write-Output "[push] failed (exit $LASTEXITCODE); retrying in 2s ..."
+        Start-Sleep -Seconds 2
+    }
+    return $false
+}
+
 Write-Output "[push] pushing branch $Branch ..."
-git push $pushTarget "${Branch}:${Branch}" @forceArg
+$ok1 = Invoke-Push (@("${Branch}:${Branch}") + $forceArg)
 Write-Output "[push] pushing tags ..."
-git push $pushTarget --tags @forceArg
+$ok2 = Invoke-Push (@("--tags") + $forceArg)
+if (-not ($ok1 -and $ok2)) { throw "git push failed after retries" }
 
 Write-Output "[push] done. Now open: https://github.com/$Repo/releases"
 Write-Output "[push] tip: attach releases/v<version>/ zips as GitHub Release assets."

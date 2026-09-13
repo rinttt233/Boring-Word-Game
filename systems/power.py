@@ -30,6 +30,10 @@ class PowerSystem:
         # 电网"满了"的死区（占容量比例）：余量小于它就当作满，发电设施直接
         # 降载停机并给出 grid_full 提示，而不是滑稽地按 3% 微功率空转。
         self.grid_full_ratio = float(c.get("grid_full_ratio", 0.02))
+        # 复电滞后（试玩提案 §6）：已判"满"的设施要等余量涨回这个比例才恢复 ——
+        # 否则电网会在死区边缘每几秒翻一次状态，把日志刷爆。
+        self.grid_resume_ratio = float(c.get("grid_resume_ratio", 0.15))
+        self._grid_stalled = set()          # 当前因"电网满"被降载的设施 id
         self.timeline_seconds = float(c.get("timeline_seconds", 90.0))
         self.timeline_samples = max(2, int(c.get("timeline_samples", 30)))
         # 本拍状态（供 industry / report / UI 查询）
@@ -78,6 +82,24 @@ class PowerSystem:
     def headroom(self, engine: object) -> float:
         """电网还能吃下多少电（A13：超出的发电量消纳不了）。"""
         return max(0.0, self.capacity(engine) - self.stored(engine))
+
+    def grid_full(self, engine: object, fac_id: str = "") -> bool:
+        """电网是否已满（带**滞后**：判满后要等余量涨回 grid_resume_ratio 才恢复）。
+
+        `fac_id` 用于按设施记忆状态：同一台发电设施不会被卡在死区边缘反复起停。
+        """
+        cap = self.capacity(engine)
+        head = self.headroom(engine)
+        if fac_id in self._grid_stalled:
+            if head < cap * self.grid_resume_ratio:
+                return True
+            self._grid_stalled.discard(fac_id)
+            return False
+        if head <= cap * self.grid_full_ratio:
+            if fac_id:
+                self._grid_stalled.add(fac_id)
+            return True
+        return False
 
     def factor(self, priority: int) -> float:
         """本拍该优先级档位的供电比例（1.0 满供 / 0.0 降载停机）。"""

@@ -15,3 +15,4 @@ dist/
 # 仅本地留档：AI 试玩报告（不进仓库，也不进 Release 快照）
 AI-playtest-report.txt
 AI-playtest-code-analysis.txt
+MODIFIABLE_PARTS_SUMMARY.md

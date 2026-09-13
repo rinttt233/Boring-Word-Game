@@ -48,7 +48,8 @@ def now_stamp() -> str:
 
 class AgentPlay:
     def __init__(self, engine, subs, in_path, out_path, samples_path=None,
-                 sample_every=60.0, gui=None, step=0.5) -> None:
+                 sample_every=60.0, gui=None, step=0.5, fresh=False,
+                 replay=False) -> None:
         self.engine = engine
         self.subs = subs
         self.router = CommandRouter(engine, subs)
@@ -58,23 +59,85 @@ class AgentPlay:
         self.sample_every = float(sample_every)
         self.step = float(step)
         self.gui = gui
+        self.replay = bool(replay)
         self.consumed = 0
         self._next_sample = 0.0
         self._log_cursor = 0
         for p in (in_path, out_path, samples_path):
             if p:
                 os.makedirs(os.path.dirname(os.path.abspath(p)), exist_ok=True)
-        # 清空输出（一次试玩一个输出文件）
-        with open(self.out_path, "w", encoding="utf-8") as f:
-            f.write(f"[{now_stamp()}] agent_play 启动（{'GUI' if gui else '无头'}）\n")
+        # 输出文件默认**追加**（试玩提案 §12：以前启动就清空，上一局日志全没了，
+        # 只能自己 Copy-Item 备份）；想开新局用 --fresh。
+        self.fresh = bool(fresh)
+        mode = "w" if self.fresh else "a"
+        with open(self.out_path, mode, encoding="utf-8") as f:
+            if not self.fresh:
+                f.write("\n")
+            f.write(f"[{now_stamp()}] agent_play 启动（{'GUI' if gui else '无头'}"
+                    f"{'，新日志' if self.fresh else '，追加'}）\n")
         if samples_path:
-            with open(self.samples_path, "w", encoding="utf-8") as f:
-                f.write("t,electricity,coal,steel,kit,units,idle,facs,stalled,"
-                        "memory,efficiency,stall_seconds,breakdowns\n")
+            with open(self.samples_path, mode, encoding="utf-8") as f:
+                if self.fresh or f.tell() == 0 or mode == "w":
+                    f.write("t,electricity,coal,steel,kit,units,idle,facs,"
+                            "stalled,memory,efficiency,stall_seconds,"
+                            "breakdowns\n")
         if not os.path.exists(in_path):
             with open(in_path, "w", encoding="utf-8") as f:
                 f.write("@view\n")
+        # 试玩提案 §12：**不从第 1 行消费** —— 文件里残留的旧命令（尤其 @quit）
+        # 会让新进程一启动就退出。默认跳过启动前已有的行（用 --replay 可重放）。
+        try:
+            with open(in_path, "r", encoding="utf-8") as f:
+                existing = len(f.read().splitlines())
+        except OSError:
+            existing = 0
+        if not replay:
+            self.consumed = existing
+            if existing:
+                self.say(f"（已跳过 in 文件里启动前的 {existing} 行历史命令；"
+                         "只执行之后追加的命令。要重放请加 --replay）")
+        self._lock_path = os.path.join(os.path.dirname(os.path.abspath(in_path)),
+                                       "agent_play.lock")
+        self._write_lock()
         self.say("用法：向 in 文件追加命令行。@view 看状态，@tick 600 推进 600 秒。")
+
+    LOCK_STALE_SEC = 12 * 3600.0        # 锁文件超过 12h 视为陈旧
+
+    def _write_lock(self) -> None:
+        """写锁文件（试玩提案 §12：两个实例同时跑会互相覆盖同一组文件）。
+
+        ⚠ **绝不探测 pid 存活**：Windows 上 `os.kill(pid, 0)` 不是"发 0 号信号探测"，
+        而是 `TerminateProcess`，会把那个进程（甚至自己）真的杀掉 —— 那是比"两个实例
+        互相覆盖"严重得多的后果。这里只按**锁文件新鲜度**做软提醒。
+        """
+        try:
+            fresh = False
+            if os.path.exists(self._lock_path):
+                age = time.time() - os.path.getmtime(self._lock_path)
+                fresh = age < self.LOCK_STALE_SEC
+                if fresh:
+                    with open(self._lock_path, encoding="utf-8") as f:
+                        old = f.read().strip()
+                    self.say(f"⚠ 存在较新的锁文件（{old or '未知'}，"
+                             f"{age / 60:.0f} 分钟前）—— 可能有另一个 agent_play "
+                             "仍在运行，两个实例会互相覆盖 in/out 文件；"
+                             "确认它已退出可忽略本条（本工具**不会**替你杀进程）。")
+            with open(self._lock_path, "w", encoding="utf-8") as f:
+                f.write(f"pid={os.getpid()} started={now_stamp()}\n")
+        except OSError:
+            pass
+
+    def _release_lock(self) -> None:
+        """退出时删掉属于自己的锁（不是自己的就不动）。"""
+        try:
+            if not os.path.exists(self._lock_path):
+                return
+            with open(self._lock_path, encoding="utf-8") as f:
+                txt = f.read()
+            if f"pid={os.getpid()}" in txt:
+                os.remove(self._lock_path)
+        except OSError:
+            pass
 
     # ---- 输出 ------------------------------------------------------
     def say(self, text: str) -> None:
@@ -88,12 +151,19 @@ class AgentPlay:
         self.say("=" * 62)
 
     def tail_logs(self, n: int = 14) -> None:
+        """输出这一拍新产生的日志；`n <= 0` 表示**不截断**（信息类命令用）。
+
+        试玩提案 §7：`facilities_help` 这类长输出曾被 tail(80) 截掉前半部分，
+        而前半正是最常用的电站/炼焦炉/高炉 —— 现在信息类命令全量输出。
+        """
         lines = self.engine.log_lines
         if len(lines) > self._log_cursor:
             new = lines[self._log_cursor:]
             self._log_cursor = len(lines)
-            show = new[-n:]
-            if len(new) > n:
+            if n <= 0 or len(new) <= n:
+                show = new
+            else:
+                show = new[-n:]
                 self.say(f"  …（还有 {len(new) - n} 行日志未显示）")
             for ln in show:
                 self.say("  │ " + ln)
@@ -322,7 +392,7 @@ class AgentPlay:
         info_cmds = ("wiki", "guide", "entries", "report", "suggest", "cover",
                      "facilities", "facilities_help", "plots", "units",
                      "status", "resources", "db", "memory", "help")
-        n = 80 if line.split()[0].lower() in info_cmds else 6
+        n = 0 if line.split()[0].lower() in info_cmds else 6
         self.tail_logs(n)
         if len(self.engine.log_lines) == before:
             self.say("（无日志输出）")
@@ -343,6 +413,7 @@ class AgentPlay:
             for ln in lines[self.consumed:]:
                 self.consumed += 1
                 if not self.handle(ln):
+                    self._release_lock()
                     return
             time.sleep(poll)
 
@@ -359,6 +430,11 @@ def main_cli() -> int:
     ap.add_argument("--sample-every", type=float, default=60.0)
     ap.add_argument("--no-samples", action="store_true")
     ap.add_argument("--speed", type=float, default=1.0)
+    ap.add_argument("--fresh", action="store_true",
+                    help="清空 out/samples 开新局（默认**追加**，保留上一局日志）")
+    ap.add_argument("--replay", action="store_true",
+                    help="连 in 文件启动前已有的命令一起执行（默认跳过，"
+                         "避免残留的 @quit 让进程立刻退出）")
     args = ap.parse_args()
 
     engine = main.build_engine()
@@ -374,7 +450,8 @@ def main_cli() -> int:
     engine.clock.pause()          # 只在被要求时推进
     shell = AgentPlay(engine, subs, args.inp, args.outp,
                       None if args.no_samples else args.samples,
-                      args.sample_every, gui=gui)
+                      args.sample_every, gui=gui, fresh=args.fresh,
+                      replay=args.replay)
     shell.say(f"引擎就绪：content 已加载（物质 {len(subs)}），"
               f"时钟默认暂停，请用 @tick 推进。")
     shell.digest()

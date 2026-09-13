@@ -156,6 +156,60 @@ def build_report(engine, router=None) -> dict:
 
     unknown = [p.id for p in engine.world.plots.values()
                if p.state == "unknown"]
+    # 试玩提案 §10/§13：空地数、即将枯竭地块、关键资源净收支、被积压限产的设施
+    free_empty = [p.id for p in engine.world.plots.values()
+                  if p.kind == "empty" and p.state in ("claimed", "developed",
+                                                       "depleted")
+                  and not any(f.plot_id == p.id for f in (ind.facilities.values()
+                                                          if ind else []))]
+    depleting = []
+    for p in engine.world.plots.values():
+        if p.kind == "ore" and p.state == "developed" and p.reserve > 0 \
+                and p.reserve < 300.0:
+            depleting.append({"id": p.id, "substance": p.substance,
+                              "reserve": round(p.reserve, 1)})
+    throttled = [{"id": f.id, "name": f.name, "substance": f.backlog_over}
+                 for f in (ind.facilities.values() if ind else [])
+                 if f.backlog_over]
+    flow = {}
+    if ind is not None:
+        for f in ind.facilities.values():
+            d = ind.defs.get(f.def_id, {})
+            if not f.assigned or f.under_construction or f.mothballed:
+                continue
+            if f.stalled_reported or ind._require_recovery(engine, f.def_id) \
+                    is not None:
+                continue
+            sf = ind._staff_factor(engine, f, d)
+            if d.get("extract_rate"):
+                plot = engine.world.get(f.plot_id)
+                sub = "water" if (plot is not None
+                                  and plot.kind == "water") else None
+                sub = sub or (plot.substance if plot is not None else None)
+                if sub:
+                    rate = float(d.get("extract_rate", 0.0)) * sf
+                    gmul = (1.0 if sub == "water"
+                            else ind.grade_factor(sub, plot.grade))
+                    flow.setdefault(sub, [0.0, 0.0])[0] += rate * gmul
+                continue
+            r = ind.recipes.get(d.get("recipe", ""), {})
+            for rid, rate in r.get("inputs", {}).items():
+                flow.setdefault(rid, [0.0, 0.0])[1] += float(rate) * sf
+            for rid, rate in r.get("outputs", {}).items():
+                flow.setdefault(rid, [0.0, 0.0])[0] += float(rate) * sf
+            for rid, rate in (r.get("byproducts") or {}).items():
+                flow.setdefault(rid, [0.0, 0.0])[0] += float(rate) * sf
+    keys = ("coal", "electricity", "coke", "iron_ore", "limestone", "steel",
+            "sulfuric_acid", "ammonia", "scrap_alloy", "salvage_part",
+            "maintenance_kit", "water")
+    net_flow = {k: {"produce": round(flow.get(k, [0.0, 0.0])[0], 3),
+                    "consume": round(flow.get(k, [0.0, 0.0])[1], 3),
+                    "net": round(flow.get(k, [0.0, 0.0])[0]
+                                 - flow.get(k, [0.0, 0.0])[1], 3)}
+                for k in keys if k in flow}
+    if ind is not None:
+        net_flow.setdefault("electricity", {})["stored"] = round(
+            ep.get("electricity"), 1)
     report = {
         "report_version": REPORT_VERSION,
         "seed": getattr(engine, "seed", None),
@@ -184,6 +238,11 @@ def build_report(engine, router=None) -> dict:
         "facilities": fac_list,
         "plots": plot_list,
         "plots_unknown": unknown,
+        # 试玩提案 §10/§13：规划用与预警用的摘要字段（只增不改）
+        "plots_free_empty": free_empty,
+        "depleting": depleting,
+        "throttled": throttled,
+        "flow": net_flow,
         "entries": entries,
         "database": ({
             "built": len(db.built), "projects": len(db.projects),
@@ -364,6 +423,31 @@ def suggest_actions(engine, router=None, limit: int = 5) -> List[dict]:
             f"缺电按优先级降载（{tier or '低优先级'}档）：{names} 等已停机。"
             "要么加发电、要么把不急的设施调离/封存腾出电力")
 
+    # 1.7) 煤电双 0 死锁的自救（试玩提案 §1/§2/§13.4）
+    #      燃煤电站只烧煤、采矿机自己耗电 → 煤 0 且电 0 就是不可逆死锁；
+    #      唯一（免科技）出路是**燃气发电机**烧副产煤气。
+    coal_now = engine.economy.get("coal")
+    stored_now = engine.economy.get("electricity")
+    has_gasgen = any(f.def_id == "gas_generator" for f in facs)
+    gas_ok = max(engine.economy.get("coalgas"), engine.economy.get("bfgas"),
+                 engine.economy.get("crack_gas")) > 20.0
+    if coal_now < 40 and not has_gasgen:
+        empty = _free_empty()
+        d = ind.defs.get("gas_generator")
+        if d is not None and empty is not None:
+            add(f"build {empty.id} gas_generator",
+                f"煤只剩 {coal_now:.0f}（电网 {stored_now:.0f}kWh）："
+                f"「燃气发电机」**免科技**、只要 {d.get('build_cost', {}).get('scrap_alloy', 0):g} 合金，"
+                "是断煤时的保底电源 —— 建好 assign 再用 fuel 设成副产煤气"
+                + ("（现在就有煤气可烧）" if gas_ok else "（先攒点副产煤气）"),
+                _missing(engine, d.get("build_cost", {}), router)
+                or _unit_block(idle))
+    if stored_now < 20 and coal_now < 40:
+        add("", f"⚠ 危险：电网只剩 {stored_now:.0f}kWh、煤 {coal_now:.0f}t —— "
+                "「煤 0 + 电 0」是不可逆死锁（采矿机要电、电站要煤）。"
+                "立刻建燃气发电机烧煤焦炉煤气/高炉煤气自救，"
+                "或用 unassign 停掉耗电产线把电留给采矿机")
+
     # 2) 施工中：等完工
     building = [f for f in facs if f.under_construction]
     if building:
@@ -482,11 +566,15 @@ def suggest_actions(engine, router=None, limit: int = 5) -> List[dict]:
                 continue                     # 前置未固化，先做前置
             cost = e.get("cost", {})
             miss = _missing(engine, cost, router)
-            # 恢复只是"临时可用"（约 90s）：固化材料没凑齐就先别 recover，
-            # 否则窗口一过条目照样丢、材料白烧。
+            # 恢复只是"临时可用"：固化材料没凑齐就先别 recover，否则窗口一过
+            # 条目照样丢、材料白烧。秒数**从 recovery 系统读**，避免写死后漂移
+            # （试玩提案 §4：这里曾写死 90s 而实际已是 180s）。
+            ttl = 180.0
+            if rec is not None and hasattr(rec, "ttl_of"):
+                ttl = float(rec.ttl_of(eid))
             fix_miss = _missing(engine, e.get("fixate_cost", {}), router)
-            warn = (f"｜固化还需 {fix_miss}：先攒够再 recover（临时窗口只有 90s）"
-                    if not miss and fix_miss else "")
+            warn = (f"｜固化还需 {fix_miss}：先攒够再 recover（临时窗口只有 "
+                    f"{ttl:.0f}s）" if not miss and fix_miss else "")
             add(f"recover {eid}", f"可恢复知识「{e.get('name', eid)}」"
                                   + (f"（解锁 {'、'.join(e.get('unlocks_facility', []))}）"
                                      if e.get("unlocks_facility") else

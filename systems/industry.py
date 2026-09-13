@@ -13,6 +13,13 @@ from typing import Dict, List, Optional
 from core.world import Plot
 from core.stats import bump as stat_bump
 
+# 关键资源（枯竭时给醒目告警，试玩提案 §5）：物质 id → 中文名
+KEY_SUBSTANCES = {
+    "coal": "煤", "iron_ore": "铁矿石", "limestone": "石灰石",
+    "sulfur": "硫磺", "copper_ore": "铜矿石", "petroleum": "石油",
+    "scrap_alloy": "残骸合金",
+}
+
 
 class Facility:
     def __init__(self, fac_id: str, plot_id: str, def_id: str,
@@ -99,6 +106,9 @@ class IndustrySystem:
         self.instant_build = False               # True=调试：建造即时完成
         self.default_build_time = 8.0            # 设施未配 build_time 时的兜底
         self.mothball_restart_sec = float(mothball_restart_sec)
+        # 停摆日志限流（试玩提案 §6）：同设施同原因 N 秒内只记一次
+        self.stall_log_gap = 20.0
+        self._stall_log: Dict[str, tuple] = {}
         self._seq = 0
 
     # ---- 品位折算（P1 ①）-------------------------------------------
@@ -521,16 +531,28 @@ class IndustrySystem:
                                         if stock > limit else 1.0, 3)}
         return out
 
-    def _note_backlog(self, engine: object, f: Facility, over: str) -> None:
-        """积压限产的进入/退出只记一次日志（避免刷屏）。"""
+    def _note_backlog(self, engine: object, f: Facility, over: str,
+                      factor: float = 1.0) -> None:
+        """积压限产的进入/退出只记一次日志（避免刷屏）。
+
+        试玩提案 §3：被限产的设施要能一眼看出是"副产物积压"而不是"输入不足" ——
+        所以这里把原因写进 `stall_reason`/`stall_code=backlog`（**不算停摆**，
+        state 仍是 running），report / UI / AI 都读得到。
+        """
         if over and f.backlog_over != over:
             f.backlog_over = over
+            f.stall_reason = f"副产物积压限产（{over} 超限，产出 ×{factor:.2f}）"
+            f.stall_code = "backlog"
             engine.log(f"[工业] {f.name} 因 {over} 积压而限产"
-                       f"（政策 {self.backlog_policy}）—— 给它找出路："
-                       "转化(水煤气变换)／放空塔／回注井，或建更多下游。",
+                       f"（×{factor:.2f}，政策 {self.backlog_policy}）—— "
+                       "给它找出路：转化(水煤气变换)／放空塔／回注井，"
+                       "或建更多下游。",
                        level="warn", category=f"fac:{f.id}")
         elif not over and f.backlog_over:
             f.backlog_over = None
+            if f.stall_code == "backlog":
+                f.stall_reason = None
+                f.stall_code = None
             engine.log(f"[工业] {f.name} 积压缓解，恢复满产。",
                        recover=f"fac:{f.id}")
 
@@ -672,18 +694,17 @@ class IndustrySystem:
     def _grid_note(self, engine: object, f: Facility, want: float) -> float:
         """发电设施受电网容量限制（A13）：返回可消纳比例 [0,1]。
 
-        余量小于容量的 `grid_full_ratio`（死区）时直接判"电网已满"并降载停机，
-        避免发电设施以 3% 的滑稽功率空转、玩家却看不出问题。
+        余量小于容量的 `grid_full_ratio`（死区）时判"电网已满"并降载停机；
+        判满后要等余量涨回 `grid_resume_ratio` 才恢复（滞后，避免死区边缘抖动刷屏）。
         """
         p = self._power_sys(engine)
         if p is None or want <= 0.0:
             return 1.0
-        head = p.headroom(engine)
-        if head <= p.capacity(engine) * p.grid_full_ratio:
+        if p.grid_full(engine, f.id):
             self._report_stall(engine, f, True, "电网已满（消纳不了）",
                               "grid_full")
             return 0.0
-        return max(0.0, min(1.0, head / want))
+        return max(0.0, min(1.0, p.headroom(engine) / want))
 
     def _tick_recipe(self, engine: object, f: Facility, d: dict,
                      dt: float, pmul: float = 1.0,
@@ -720,7 +741,7 @@ class IndustrySystem:
                  and engine.economy.get(rid) > self.backlog_limits[rid]),
                 key=lambda rid: engine.economy.get(rid) / self.backlog_limits[rid],
                 default=None)
-            self._note_backlog(engine, f, worst or "")
+            self._note_backlog(engine, f, worst or "", bfac)
         else:
             self._note_backlog(engine, f, "")
         factor *= bfac
@@ -896,6 +917,20 @@ class IndustrySystem:
             u = engine.units.get(uid)
             if u is not None:
                 u.release()
+        # 枯竭告警（试玩提案 §5）：原来只有一行"停止并拆除"，煤矿采空后玩家
+        # 根本不知道"煤供给已归零"。关键资源单独给醒目告警。
+        sub = plot.substance or ("water" if plot.kind == Plot.KIND_WATER else "")
+        if sub in KEY_SUBSTANCES:
+            name = KEY_SUBSTANCES[sub]
+            rest = [p.id for p in engine.world.plots.values()
+                    if p.substance == sub and p.id != plot.id
+                    and p.state in ("known", "claimed", "developed")]
+            tail = (f"还有 {len(rest)} 处可采（{'、'.join(rest[:3])}…）"
+                    if rest else "**已无其他已知矿点，赶紧 survey / claim**")
+            engine.log(
+                f"⚠ {name} {plot.id} 采空 —— {name}供给中断，"
+                f"请立即指派新矿点（{tail}）。",
+                level="warn", category="industry")
         if d.get("reward_unit_on_deplete"):
             nu = engine.units.add_unit("执行器-回收")
             engine.log(f"[工业] 残骸拆解完毕，回收出完整执行单元 {nu.id}！")
@@ -903,18 +938,31 @@ class IndustrySystem:
 
     def _report_stall(self, engine: object, f: Facility, stalled: bool,
                       reason: str, code: str = "") -> None:
+        """停摆/恢复的日志（只在状态变化时写）+ **抖动限流**。
+
+        试玩提案 §6：电网满/复电会每几秒翻一次状态，单局能刷出上万行日志，
+        把研究完成、枯竭告警这类真信息全埋掉。这里对"同一设施同一原因
+        在 stall_log_gap 秒内重复进入"不再写日志（状态本身照旧更新）。
+        """
         cat = f"fac:{f.id}"
         if stalled and not f.stalled_reported:
             f.stalled_reported = True
             f.stall_reason = reason
             f.stall_code = code or None
             stat_bump(engine, "stall_events")
-            engine.log(f"[工业] {f.name} 停摆：{reason}。",
-                       level="warn", category=cat)
+            now = float(engine.clock.time)
+            key = code or reason
+            last = self._stall_log.get(f.id)
+            if not (last and last[0] == key
+                    and now - last[1] < self.stall_log_gap):
+                self._stall_log[f.id] = (key, now)
+                engine.log(f"[工业] {f.name} 停摆：{reason}。",
+                           level="warn", category=cat)
         elif not stalled and f.stalled_reported:
             f.stalled_reported = False
             f.stall_reason = None
             f.stall_code = None
+            self._stall_log.pop(f.id, None)
             engine.log(f"[工业] {f.name} 恢复运转。", recover=cat)
 
     # ---- 查询 ------------------------------------------------------

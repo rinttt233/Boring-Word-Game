@@ -338,6 +338,20 @@ class CommandRouter:
         err = rec.recover(self.engine, args[0]) if rec else "无恢复系统"
         if err:
             self.engine.log(f"[数据库] {err}")
+            return
+        # 试玩提案 §9：recover 只花电，fixate 还要合金 —— 材料没备齐就白烧窗口
+        if rec is not None:
+            e = rec.entries.get(args[0], {})
+            miss = [f"{k} 缺 {float(v) - self.engine.economy.get(k):g}"
+                    for k, v in (e.get("fixate_cost") or {}).items()
+                    if self.engine.economy.get(k) < float(v)]
+            if miss:
+                ttl = rec.ttl_of(args[0]) if hasattr(rec, "ttl_of") else 180.0
+                self.engine.log(
+                    f"⚠ 固化材料不足（{'、'.join(miss)}）：临时窗口只有 "
+                    f"{ttl:.0f}s，窗口一过条目照样丢 —— 赶紧补齐材料后 "
+                    f"`fixate {args[0]}`，或先把电/单元让给别的活。",
+                    level="warn", category="memory")
 
     def _cmd_fixate(self, args):
         if not args:
@@ -518,6 +532,29 @@ class CommandRouter:
         jobs = self.engine.jobs.count()
         self.engine.log(f"已勘察地块 {len(plots)} 处，其中矿藏 {known} 处 | "
                         f"设施 {nfac} | 进行中作业 {jobs}")
+        # 试玩提案 §10/§13：空地数（工厂只能建空地，是最稀缺的规划资源）
+        free_empty = [p.id for p in plots
+                      if p.kind == "empty"
+                      and p.state in ("claimed", "developed", "depleted")
+                      and not any(f.plot_id == p.id
+                                  for f in (ind.facilities.values()
+                                            if ind else []))]
+        if free_empty:
+            self.engine.log(f"可用空地 {len(free_empty)} 块（{'、'.join(free_empty[:6])}"
+                            + ("…" if len(free_empty) > 6 else "") + "）")
+        else:
+            self.engine.log("可用空地 **0 块** —— 工厂类设施只能建空地："
+                            "先 survey/claim 新地块，或 demolish 掉不用的设施")
+        # 试玩提案 §3/§13：被副产物积压限产的设施（别误判成"输入不足"）
+        if ind is not None:
+            thr = [f for f in ind.facilities.values() if f.backlog_over]
+            if thr:
+                self.engine.log(
+                    "[积压] 被限产：" + "、".join(
+                        f"{f.name}({f.backlog_over})" for f in thr[:5])
+                    + " —— 出路：水煤气变换炉／放空塔／回注井／"
+                      "`policy backlog ignore`", level="warn",
+                    category="industry")
         # 电力预算（M3：诊断"为何停摆"）
         if ind is not None:
             pb = ind.power_balance(self.engine)

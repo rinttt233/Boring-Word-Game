@@ -467,24 +467,26 @@
    "id": "make_maintenance",
    "name": "维护件制造",
    "inputs": {
-    "steel": 0.05,
-    "scrap_alloy": 0.12
+    "salvage_part": 0.04,
+    "steel": 0.03,
+    "scrap_alloy": 0.08
    },
    "outputs": {
     "maintenance_kit": 0.3
    },
-   "desc": "把钢与残骸合金加工成轴承/密封/滤芯。维持整座工厂的代价。"
+   "desc": "用回收部件替代部分钢与合金，做出轴承/密封/滤芯。维持整座工厂的代价，也是拆船件的第二个去处。"
   },
   {
    "id": "assemble_unit",
    "name": "执行单元装配",
    "inputs": {
-    "steel": 0.08,
-    "copper": 0.05,
-    "electricity": 0.6
+    "salvage_part": 0.03,
+    "steel": 0.05,
+    "copper": 0.03,
+    "electricity": 0.5
    },
    "outputs": {},
-   "desc": "钢做骨架、铜做绕组：装配出完整的执行单元本体（按装配厂速率产出，约 200 秒 1 个）。从此单元数量可以自己造，不再只靠拾荒。"
+   "desc": "部件做骨架与关节、钢做结构、铜做绕组：装配出完整的执行单元本体（按装配厂速率产出，约 200 秒 1 个）。单元不再只靠拾荒，但必须自己拆部件、炼钢铜。"
   },
   {
    "id": "shift_gas",
@@ -498,6 +500,19 @@
     "hydrogen": 0.35
    },
    "desc": "CO + H₂O → CO₂ + H₂：把多余的焦炉煤气转成氢，既消积压又给氢源。教材里的经典变换反应。"
+  },
+  {
+   "id": "recycle_parts",
+   "name": "部件回炉",
+   "inputs": {
+    "salvage_part": 0.3,
+    "electricity": 0.2
+   },
+   "outputs": {
+    "scrap_alloy": 0.22,
+    "steel": 0.08
+   },
+   "desc": "把过剩的回收部件拆成合金与钢：残骸链的最终出口，让「拆太多用不完」也有价值。"
   }
  ]
 }

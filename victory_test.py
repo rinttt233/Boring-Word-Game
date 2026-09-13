@@ -96,6 +96,8 @@ def main():
     eng.economy.set("coal", 5000.0)
     eng.economy.set("water", 20000.0)
     eng.economy.set("limestone", 3000.0)
+    # A6（批次5）：维护件与执行单元都要吃「回收部件」，端点直接给足
+    eng.economy.set("salvage_part", 4000.0)
     for i in range(30):
         eng.units.add_unit(f"执行器-测试{i + 1}")
 

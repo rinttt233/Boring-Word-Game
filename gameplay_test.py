@@ -104,7 +104,7 @@ def main():
     assert eng2.economy.get("iron_ore") > 0
     print("闭环步骤 6 OK：存档读档含设施状态")
 
-    # 7) 手工构造一个枯竭奖励场景（reserve 很小）
+    # 7) 残骸枯竭：**不再白给执行单元**（A6），改为拆出「回收部件」
     from core.world import Plot
     eng2.world.spawn(ring=0, kind="wreck", substance="scrap_alloy",
                      grade=50, reserve=1.0, state="claimed")
@@ -120,10 +120,13 @@ def main():
         "回收站应建成"
     ind2.assign(eng2, sal.id)
     n0 = eng2.units.count()
+    parts0 = eng2.economy.get("salvage_part")
     tick_until(eng2, lambda: eng2.world.get(wid).state == "depleted",
                max_s=30)
-    assert eng2.units.count() == n0 + 1, "残骸枯竭应奖励执行单元"
-    print("闭环步骤 7 OK：残骸回收奖励执行单元")
+    assert eng2.units.count() == n0, "A6：残骸枯竭不再白给执行单元"
+    assert eng2.economy.get("salvage_part") > parts0 + 0.2, \
+        "残骸应拆出回收部件"
+    print("闭环步骤 7 OK：残骸拆出回收部件（不再白给单元，A6）")
 
     print("GAMEPLAY-OK")
 

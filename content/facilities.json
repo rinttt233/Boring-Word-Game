@@ -43,10 +43,12 @@
    "extract_rate": 1.2,
    "power_use": 0.1,
    "slots": 1,
-   "reward_unit_on_deplete": true,
-   "desc": "拆解坠毁残骸回收合金；枯竭时可能回收出完整执行单元。",
+   "desc": "拆解坠毁残骸回收合金，并拆出可用的**回收部件**。（A6：枯竭不再直接掉落执行单元 —— 单元要走装配厂，部件是它的原料。）",
    "build_time": 6,
-   "power_priority": 2
+   "power_priority": 2,
+   "extract_extra": {
+    "salvage_part": 0.3
+   }
   },
   {
    "id": "cokery",
@@ -751,7 +753,7 @@
    "recipe": "make_maintenance",
    "slots": 1,
    "requires_recovery": "db_upkeep",
-   "desc": "制造维护件的车间。恢复「设备维护」知识后，所有设施都开始消耗维护件。",
+   "desc": "制造维护件的车间：用**回收部件**替代部分钢与合金。恢复「设备维护」知识后，所有设施都开始消耗维护件。",
    "build_time": 16,
    "power_priority": 2
   },
@@ -771,7 +773,7 @@
    "unit_rate": 0.005,
    "slots": 1,
    "requires_recovery": "db_units",
-   "desc": "装配执行单元本体：约 200 秒 1 个（受单元效能加速），每个耗 16 钢 + 10 铜。把「单元数量」从固定资源变成可投资产能。",
+   "desc": "装配执行单元本体：约 200 秒 1 个（受单元效能加速），每个耗 6 件回收部件 + 10 钢 + 6 铜 + 120 电。把「单元数量」从固定资源变成可投资产能；残骸拆出的部件在这里变成新的执行单元。",
    "build_time": 22,
    "power_priority": 0
   },
@@ -882,6 +884,23 @@
    "build_time": 14,
    "power_priority": 1,
    "desc": "熔盐/蒸汽蓄热：便宜、好造，但效率低（75%）、充放慢（2.0/s），适合中前期削峰填谷。"
+  },
+  {
+   "id": "parts_works",
+   "name": "部件加工车间",
+   "allowed_plot_kinds": [
+    "empty"
+   ],
+   "build_cost": {
+    "scrap_alloy": 20.0,
+    "steel": 5.0
+   },
+   "recipe": "recycle_parts",
+   "slots": 1,
+   "requires_recovery": "db_steel",
+   "build_time": 14,
+   "power_priority": 1,
+   "desc": "把过剩的回收部件拆回合金与钢（部件 0.3 + 电 0.2 → 合金 0.22 + 钢 0.08）：残骸太多的出口，也让「拆船」回本。"
   }
  ]
 }

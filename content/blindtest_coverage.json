@@ -156,6 +156,12 @@
       "desc": "用转化/放空/回注解除积压",
       "assert": "any(f['def'] in ('gas_shift', 'vent_tower', 'injection_well') for f in r['facilities'])",
       "hint": "build gas_shift / vent_tower / injection_well"
+    },
+    {
+      "id": "parts",
+      "desc": "残骸拆出回收部件",
+      "assert": "r['resources'].get('salvage_part', 0) > 0",
+      "hint": "claim 残骸 → build salvager → assign"
     }
   ]
-}
+}

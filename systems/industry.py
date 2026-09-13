@@ -761,6 +761,12 @@ class IndustrySystem:
         if out <= 0:
             return
         engine.economy.add(sub, out)
+        # 顺带产出（批次5 A6）：拆残骸时按比例附带拆出回收部件等。
+        # 比例以"主产物"为基准，随同一 factor/效能/环境缩放，不吃储量。
+        for rid, ratio in (d.get("extract_extra") or {}).items():
+            extra = out * float(ratio)
+            if extra > 0:
+                engine.economy.add(rid, extra)
         f.produced_any = True
         if plot.kind != Plot.KIND_WATER:
             plot.reserve -= out

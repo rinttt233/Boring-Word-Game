@@ -33,10 +33,13 @@ BUFFER = {"scrap_alloy": 15.0, "iron_ore": 30.0, "limestone": 20.0, "coke": 15.0
           "pig_iron": 10.0, "steel": 20.0, "sulfur": 10.0, "sulfuric_acid": 8.0,
           "ammonia": 8.0, "copper_ore": 15.0, "copper": 6.0}
 # 主线推进优先序（db_upkeep 故意靠后：维护件一开就持续吃合金，先让其它条目就位）
+# A6 之后单元只能靠装配厂造，而装配厂要**铜**（建造 8 铜 + 配方 0.03/s）
+# → 铜线（db_sulfuric → db_copper）必须排在 db_units 之前，否则装配厂永远开不起来。
 MAINLINE_ORDER = [
-    "db_coking", "db_blast_furnace", "db_steel", "db_unit_bus", "db_unit_parallel",
-    "db_units", "db_sulfuric", "db_ammonia", "db_petrol", "db_copper",
-    "db_distill", "db_refractory", "db_rare_earth", "db_upkeep",
+    "db_coking", "db_blast_furnace", "db_steel", "db_unit_bus",
+    "db_sulfuric", "db_copper", "db_unit_parallel", "db_units",
+    "db_ammonia", "db_petrol", "db_distill", "db_refractory",
+    "db_rare_earth", "db_upkeep",
 ]
 
 # 设施计划表：按胜利路径排列（越靠前越先满足）
@@ -231,10 +234,10 @@ class LadderPolicy:
         return t
 
     def unit_gap(self, rep: dict) -> int:
-        """还想补几个单元：让"设施数 + 3 个周转"不超过现有单元。"""
+        """还想补几个单元：让"设施数 + 2 个周转"不超过现有单元。"""
         built = len(rep.get("facilities", []))
         total = int((rep.get("units") or {}).get("total", 0))
-        return max(0, built + 3 - total)
+        return max(0, built + 2 - total)
 
     def _needed(self, role: dict, rep: dict, targets: dict) -> bool:
         kind = role.get("staff")
@@ -246,13 +249,15 @@ class LadderPolicy:
                 return self._power_needed(rep)
             return True
         if kind == "units":
-            # 单元不够（设施 + 3 个周转）就补；另外"钢明显富余且单元还不到 12 个"
-            # 时也补产能 —— 单元越多能同时开的产线越多（本作核心瓶颈）。
-            # 用"库存 > 剩余计划需求 + 40"当闸门，避免抢掉数据库的钢。
-            surplus = self._stock(rep, "steel") > targets.get("steel", 0.0) + 40.0
-            return (self.unit_gap(rep) > 0
-                    or (int((rep.get("units") or {}).get("total", 0)) < 12
-                        and surplus))
+            # 单元是核心瓶颈（A6 之后残骸不再白给单元）：只要钢不紧张就尽早开装配厂。
+            # 闸门取"剩余计划需求 + 15"与 80 的较小值 —— 单元本身能加速炼钢，
+            # 不必等钢完全富余（但也不能把数据库的钢吃光）。
+            built = len(rep.get("facilities", []))
+            total = int((rep.get("units") or {}).get("total", 0))
+            gate = min(targets.get("steel", 0.0) + 15.0, 80.0)
+            enough = self._stock(rep, "steel") > gate
+            return (self.unit_gap(rep) > 0 or total < max(12, built + 2)) \
+                and enough
         if kind == "backlog":
             return self._backlog_over(rep)
         if kind == "gas":
@@ -432,8 +437,10 @@ class LadderPolicy:
                 return act
 
         # 10) 派员：空闲单元给"当前需要"的设施（按计划表优先级）
+        #     只剩 1 个空闲单元又有该建的设施 → 留作"施工单元"（建造也要占单元）
+        reserve = (idle <= 1 and self._pending_build(rep, targets))
         if idle > 0:
-            act = self._staff_step(rep, targets)
+            act = self._staff_step(rep, targets, reserve)
             if act:
                 return act
 
@@ -451,7 +458,8 @@ class LadderPolicy:
         # 12) 主线推进（恢复下一个可研究的条目）
         endgame = self._endgame(rep)
         if not endgame:
-            act = self._recover_step(rep, idle)
+            # 预留的"施工单元"不给研究用，免得又出现"想建没单元"
+            act = self._recover_step(rep, idle - (1 if reserve else 0))
             if act:
                 return act
 
@@ -567,8 +575,50 @@ class LadderPolicy:
     def _failed_too_often(self, cmd: str) -> bool:
         return self._fails.get(cmd, 0) >= 3
 
-    def _staff_step(self, rep: dict, targets: dict) -> Optional[dict]:
-        """把空闲单元派给"该转但没人"的设施（计划表优先级）。"""
+    def _perm(self, rep: dict) -> set:
+        return {e["id"] for e in (rep.get("entries") or {}).get("permanent", [])}
+
+    def _pending_build(self, rep: dict, targets: dict) -> bool:
+        """是否有"该建、也能建"的设施在等一个空闲单元。
+
+        建造要占一个单元（批次1.5）：如果策略把最后一个空闲单元也派出去，
+        就会出现"想建装配厂却没有单元建"的死结 —— 所以留一个机动单元。
+        """
+        perm = self._perm(rep)
+        over = bool(self._backlog_over(rep))
+        for role in self.plan:
+            if role["key"] == "vent" and not over:
+                continue
+            if self._count(rep, role["key"]) >= self._count_target(role, rep):
+                continue
+            if not self._needed(role, rep, targets):
+                continue
+            d = self.fac_defs[role["def_id"]]
+            need = d.get("requires_recovery")
+            if need and need not in perm:
+                continue
+            if not self._affordable(d.get("build_cost"), rep):
+                continue
+            cands = self._candidates(role, rep)
+            if not cands:
+                continue
+            p = cands[0]
+            cmd = (f"build {p['id']} {role['def_id']}"
+                   if p.get("state") in ("claimed", "developed", "depleted")
+                   else f"claim {p['id']}")
+            if self._failed_too_often(cmd):
+                continue                    # 这条建不动 → 别为它留单元
+            return True
+        return False
+
+    def _staff_step(self, rep: dict, targets: dict,
+                    reserve: bool = False) -> Optional[dict]:
+        """把空闲单元派给"该转但没人"的设施（计划表优先级）。
+
+        `reserve=True`：这一个空闲单元要留给建造用，不派出去。
+        """
+        if reserve:
+            return None
         cands = []
         for f in rep.get("facilities", []):
             # 用"有没有单元"判定，而不是 state == unstaffed：

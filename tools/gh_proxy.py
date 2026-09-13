@@ -63,6 +63,12 @@ def dial(host: str, port: int) -> socket.socket:
 
 
 def pipe(a: socket.socket, b: socket.socket) -> None:
+    """单向转发：a → b。结束时**只半关 b 的写方向**，不能 RDWR 全关。
+
+    早期版本在这里对两个 socket 都 shutdown(SHUT_RDWR)：git push 在
+    "客户端发完请求、正等响应"时会触发 a→b 方向 EOF，于是把 upstream 也关掉，
+    服务端直接断连 → 表现为随机的 `OpenSSL SSL_read: unexpected eof`。
+    """
     try:
         while True:
             data = a.recv(65536)
@@ -72,14 +78,14 @@ def pipe(a: socket.socket, b: socket.socket) -> None:
     except OSError:
         pass
     finally:
-        for s in (a, b):
-            try:
-                s.shutdown(socket.SHUT_RDWR)
-            except OSError:
-                pass
+        try:
+            b.shutdown(socket.SHUT_WR)
+        except OSError:
+            pass
 
 
 def handle(conn: socket.socket) -> None:
+    upstream = None
     try:
         conn.settimeout(20)
         head = b""
@@ -111,10 +117,13 @@ def handle(conn: socket.socket) -> None:
     except Exception as e:                      # noqa: BLE001
         log(f"handle 异常: {type(e).__name__}: {e}")
     finally:
-        try:
-            conn.close()
-        except OSError:
-            pass
+        for s in (conn, upstream):
+            if s is None:
+                continue
+            try:
+                s.close()
+            except OSError:
+                pass
 
 
 def main() -> int:

@@ -91,6 +91,14 @@ def make_notes(version: str, out_dir: str, has_agent: bool = True,
     # Release 页不需要这两行（归档/快照是本地目录）
     section = "\n".join(l for l in section.splitlines()
                         if not l.startswith(("**归档**", "**发布快照**")))
+    # CHANGELOG 里每个版本是「速览 + <details> 详细报告」：Release 页只放速览，
+    # 保证"一眼看完"；逐项细节留在 CHANGELOG（可读性优先的口径，2026-09-13 定）。
+    if "<details>" in section:
+        section = section.split("<details>")[0].rstrip()
+        section += ("\n\n> 想看逐项细节？完整更新报告见 "
+                    "[CHANGELOG.md]"
+                    "(https://github.com/rinttt233/Boring-Word-Game/blob/main/"
+                    "CHANGELOG.md)。")
     if not snapshot_ok:
         section = (f"> 注意：本地缺少 `releases/v{version}/` 快照，"
                    "本次未附可运行 zip（源码包可用）。\n\n" + section)

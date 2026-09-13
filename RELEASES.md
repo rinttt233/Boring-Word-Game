@@ -69,9 +69,14 @@ python -X utf8 tools/make_release_notes.py --version 1.3.1
 
 | 版本 | Release 页面 | 附件（sha256） |
 |---|---|---|
+| 1.3.2 | [releases/tag/v1.3.2](https://github.com/rinttt233/Boring-Word-Game/releases/tag/v1.3.2) | `Boring-Word-Game-v1.3.2.zip`（115 文件，388 KB，`726a14d4…2a80`） |
 | 1.3.1 | [releases/tag/v1.3.1](https://github.com/rinttt233/Boring-Word-Game/releases/tag/v1.3.1) | `Boring-Word-Game-v1.3.1.zip`（108 文件，346 KB，`6ab578cf…7151`） |
 | 1.3 | [releases/tag/v1.3](https://github.com/rinttt233/Boring-Word-Game/releases/tag/v1.3) | `Boring-Word-Game-v1.3.zip`（91 文件，259 KB，`f119768b…9bb9`） |
 | 1.2 | [releases/tag/v1.2](https://github.com/rinttt233/Boring-Word-Game/releases/tag/v1.2) | `Boring-Word-Game-v1.2.zip`（81 文件，206 KB，`ad3a2db1…0ada`） |
+
+> **更新报告的写法（2026-09-13 定的口径：可读性优先）**：`CHANGELOG.md` 里每个版本是
+> 「**速览**（4~6 条，一眼扫完）+ `<details>` 折叠的详细报告」，Release 页面只放**速览**
+> （`tools/make_release_notes.py` 会自动截断 `<details>`），细节留给 CHANGELOG。
 
 > 本机 `github.com` 被 hosts 屏蔽，推送/发布需先起本地代理：
 > `python -X utf8 tools/gh_proxy.py --port 8443`，再设

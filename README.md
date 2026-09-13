@@ -15,6 +15,29 @@ python main.py --gui-selftest       # GUI 自检（无显示环境自动跳过�
 
 > Windows 控制台若中文乱码，请运行 `chcp 65001` 或使用 Windows Terminal。
 
+## 给 AI 玩（不读源码也能玩通）
+
+**入口是 [`AGENTS.md`](AGENTS.md)** —— 它由 `tools/make_guide.py` 从
+`content/guide.json` 生成（和游戏内 `guide` 命令同源，不会漂移），包含硬约束、
+规则要义、推荐开局 10 步、常见卡点排障、通关判据与上报方式。
+
+```bash
+python -X utf8 tools/agent_play.py            # 试玩回路：命令走 saves/ai_in.txt，回执看 saves/ai_out.txt
+python -X utf8 tools/agent_play.py --gui      # 同上但开真窗口（可配合截图）
+python -X utf8 main.py --seed 123             # 固定随机种子（勘探/环境/故障可复现）
+python -X utf8 tools/blind_test.py --runs 3   # 按策略自动盲玩，出覆盖度/用时/停摆汇总
+python -X utf8 tools/play_report.py           # 把 saves/ai_samples.csv 出成遥测报告
+```
+
+游戏内随时可用（GUI 与控制台同一套命令）：
+
+| 命令 | 作用 |
+|---|---|
+| `guide [章节]` | 打印试玩向导（与 AGENTS.md 同源） |
+| `report [to <文件>]` | **JSON 状态**（固定 schema，带 report_version），便于机器解析 |
+| `suggest` | 现在最该做的 3~5 件事（命令 + 理由 + 阻塞原因） |
+| `cover` | 内容覆盖清单进度（`content/blindtest_coverage.json`） |
+
 ## 交互指令
 
 | 命令 | 作用 |
@@ -27,29 +50,56 @@ python main.py --gui-selftest       # GUI 自检（无显示环境自动跳过�
 | `claim <地块id>` | 占领已勘探地块 |
 | `build <地块id> <设施id>` | 在已占领地块建厂（`facilities_help` 看图鉴，部分需先恢复条目） |
 | `assign <设施id>` / `unassign` | 分配/调离执行单元到设施 |
+| `fuel <设施id> <燃料id>` | 给燃烧发电设施切换燃料（固体/液体/气体按设施限定） |
+| `mothball <设施id> [on\|off]` | 封存（零维护消耗）/ 解除封存（需单元 + 重启时间） |
+| `undo` | 撤销最近一次建造（施工中可中止并退料；已产出不可撤销，Ctrl+Z） |
 | `facilities` / `units` | 设施清单 / 执行单元 |
 | `entries` | 数据库条目清单（可恢复项） |
 | `recover <条目id>` | 从数据库恢复知识条目（临时，需固化） |
 | `fixate <条目id>` | 烧录固化条目（永久，防记忆崩溃丢失） |
-| `maintain` / `memory` | 记忆加固 / 记忆状态 |
+| `maintain` / `memory` | 记忆加固 / 记忆状态（含劣化速率与维护件摘要） |
 | `db` | 可靠数据库工程进度（终局目标） |
 | `construct` | 建造数据库当前子系统 |
-| `migrate` | 烧录迁移全部知识（需所有条目已固化） |
+| `migrate` | 烧录迁移全部知识（需所有主线条目已固化） |
 | `status` / `resources` | 总览（含电网产耗）/ 库存 |
 | `logs` | 最近日志 |
-| `save <名>` / `load <名>` | 存档/读档（saves/ 目录） |
+| `wiki [关键词\|#id]` | 游戏内百科（设定/教程/阶段/科普/资源/建筑/配方/科技） |
+| `guide` / `report` / `suggest` / `cover` | 给 AI 的向导 / JSON 状态 / 下一步建议 / 覆盖清单 |
+| `dbg <子命令>` | 调试：`res`/`add`/`mem`/`unit`/`unlock`/`time`/`env`/`degrade`/`instant` |
+| `save <名>` / `load <名>` | 存档/读档（`saves/`；GUI 里点「存档/读档」或 F9/F10 有槽位窗口） |
 | `quit` | 退出 |
 
 ## 测试
 
 ```bash
-python -m unittest discover -s tests   # 46 单元测试
-python smoke_test.py                   # 集成冒烟
-python gameplay_test.py                # M1 玩法闭环（真实 content）
-python chain_test.py                   # M2 真实工艺链端到端
-python victory_test.py                 # M3 完整通关：数据库竣工→劣化终止
-python balance_probe.py                # M4 平衡探针（数值不变量+早期冒烟）
+python -X utf8 -m unittest discover -s tests   # 单元测试（当前 130+）
+python -X utf8 main.py --gui-selftest           # GUI 自检
+python -X utf8 smoke_test.py                    # 集成冒烟
+python -X utf8 gameplay_test.py                 # M1 玩法闭环（真实 content，含真实施工耗时）
+python -X utf8 chain_test.py                    # M2 真实工艺链端到端
+python -X utf8 tlb/tlc/tld/tle_test.py          # TL-B~E 各阶段端到端
+python -X utf8 power_test.py                    # 电力体系端到端
+python -X utf8 victory_test.py                  # M3 完整通关：数据库竣工→劣化终止
+python -X utf8 balance_probe.py                 # M4 平衡探针
+python -X utf8 tools/cost_audit.py --write      # 基线测量 → docs/baseline_report.md
 ```
+
+## 工具与文档
+
+| 路径 | 用途 |
+|---|---|
+| `AGENTS.md` | **AI 试玩入口**（由 `content/guide.json` 生成） |
+| `tools/agent_play.py` | 试玩回路（文件协议，AI/脚本逐回合下命令） |
+| `tools/blind_test.py` | 盲玩自动化（覆盖度/用时/停摆汇总） |
+| `tools/play_report.py` | 遥测报告（曲线、停摆占比、单元利用率） |
+| `tools/cost_audit.py` | 成本/容量基线测量（只读） |
+| `tools/make_guide.py` | 从 `content/guide.json` 生成 `AGENTS.md` |
+| `tools/screenshot.ps1` | 按窗口标题截图（需看图能力） |
+| `docs/roadmap.md` | 分批路线与执行记录 |
+| `docs/balance_proposals.md` | 平衡/内容清单（含试玩发现） |
+| `docs/baseline_report.md` | 自动生成的基线测量报告 |
+| `docs/blindtest_plan.md` | 控制台盲测支持方案 |
+| `docs/versioning.md` | 版本与发布规范 |
 
 ## 结构
 

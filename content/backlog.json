@@ -1,0 +1,17 @@
+{
+ "_comment": "副产物积压模型（批次3）：某副产物库存超过 limits 时，产出它的设施按 clamp(limit/stock, min_factor, 1.0) 限产（默认 throttle），逼迫玩家给它找出路。policy 可切换 ignore（纯沙盒）／throttle（默认限产）。",
+ "limits": {
+  "coalgas": 400.0,
+  "coaltar": 200.0,
+  "bfgas": 600.0,
+  "crack_gas": 300.0,
+  "hydrogen": 500.0,
+  "vanadium": 200.0
+ },
+ "min_factor": 0.15,
+ "policy_default": "throttle",
+ "policy_options": [
+  "throttle",
+  "ignore"
+ ]
+}

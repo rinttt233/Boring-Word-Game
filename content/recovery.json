@@ -522,7 +522,8 @@
    "temporary_ttl": 90.0,
    "grants": {
     "unit_efficiency": 0.25
-   }},
+   }
+  },
   {
    "id": "db_unit_prefetch",
    "name": "指令预取与流水调度工艺包",
@@ -565,7 +566,8 @@
    ],
    "grants": {
     "unit_efficiency": 0.5
-   }},
+   }
+  },
   {
    "id": "db_unit_autonomy",
    "name": "单元自主决策工艺包",
@@ -609,6 +611,29 @@
    ],
    "unlocks_facility": [
     "maintenance_depot"
+   ]
+  },
+  {
+   "id": "db_units",
+   "name": "执行单元装配工艺包",
+   "desc": "恢复出的不只是算法，还有手艺：钢做骨架、铜做绕组，ASI 可以自己装配执行单元了。解锁「执行单元装配厂」。",
+   "cost": {
+    "electricity": 90.0,
+    "steel": 10.0,
+    "copper": 6.0
+   },
+   "fixate_cost": {
+    "electricity": 45.0,
+    "steel": 6.0
+   },
+   "duration": 18.0,
+   "temporary_ttl": 90.0,
+   "depends_on": [
+    "db_steel",
+    "db_unit_bus"
+   ],
+   "unlocks_facility": [
+    "unit_factory"
    ]
   }
  ]

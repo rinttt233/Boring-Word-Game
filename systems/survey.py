@@ -14,10 +14,11 @@ from core.world import Plot
 
 
 class SurveySystem:
-    def __init__(self, regions_cfg: dict) -> None:
+    def __init__(self, regions_cfg: dict, seed=None) -> None:
         self.regions = regions_cfg.get("regions", [])
         self.surveys_per_ring = int(regions_cfg.get("surveys_per_ring", 3))
-        self._rng = random.Random()          # 可注入种子以便测试
+        # 可注入种子以便复现同一局（盲测/回归需要"同 seed 同结果"）
+        self._rng = random.Random(seed)
 
     def start(self, engine: object) -> None:
         self._engine = engine

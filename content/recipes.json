@@ -474,6 +474,30 @@
     "maintenance_kit": 0.3
    },
    "desc": "把钢与残骸合金加工成轴承/密封/滤芯。维持整座工厂的代价。"
+  },
+  {
+   "id": "assemble_unit",
+   "name": "执行单元装配",
+   "inputs": {
+    "steel": 0.08,
+    "copper": 0.05,
+    "electricity": 0.6
+   },
+   "outputs": {},
+   "desc": "钢做骨架、铜做绕组：装配出完整的执行单元本体（按装配厂速率产出，约 200 秒 1 个）。从此单元数量可以自己造，不再只靠拾荒。"
+  },
+  {
+   "id": "shift_gas",
+   "name": "水煤气变换",
+   "inputs": {
+    "coalgas": 0.6,
+    "water": 0.2,
+    "electricity": 0.1
+   },
+   "outputs": {
+    "hydrogen": 0.35
+   },
+   "desc": "CO + H₂O → CO₂ + H₂：把多余的焦炉煤气转成氢，既消积压又给氢源。教材里的经典变换反应。"
   }
  ]
 }

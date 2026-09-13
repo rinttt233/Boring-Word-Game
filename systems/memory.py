@@ -57,13 +57,21 @@ class MemorySystem:
                    if st == "permanent" and eid in rec.entries)
 
     def _running_facility_count(self, engine: object) -> int:
+        """**真正在运转**的设施数（P1 ④：停摆/停机的不算）。
+
+        与文档表述保持一致（"劣化 = … + 0.004×运转设施数"）。此前把停摆设施
+        也算进来，会让记忆劣化虚高（实测可差 ~0.08/s）。
+        """
         getter = getattr(engine.registry, "get", None)
         ind = getter("industry") if getter is not None else None
         if ind is None:
             return 0
+        now = float(getattr(engine.clock, "time", 0.0))
         return sum(1 for f in ind.facilities.values()
                    if f.assigned and not f.under_construction
-                   and not getattr(f, "mothballed", False))
+                   and not getattr(f, "mothballed", False)
+                   and not getattr(f, "stalled_reported", False)
+                   and float(getattr(f, "halt_until", 0.0)) <= now)
 
     def degrade_rate(self, engine: object) -> float:
         """当前劣化速率（/s）：base + 条目项 + 设施项。"""

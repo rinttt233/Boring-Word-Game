@@ -24,6 +24,10 @@ class Facility:
         self.assigned: List[str] = []        # 分配的执行单元 id
         self.stalled_reported = False        # 停摆日志去重
         self.stall_reason: Optional[str] = None   # 最近一次停摆原因（供 UI 展示）
+        # 机器可读的停摆码（P0 统一口径）：no_input/no_power/no_fuel/
+        # no_fuel_set/fuel_class/fuel_unburnable/no_recipe/no_capacity/
+        # knowledge_lost/halted。供 report 与脚本断言用，文案可自由改。
+        self.stall_code: Optional[str] = None
         self.fuel: Optional[str] = None      # burner 当前燃料
         self.produced_any = False            # 是否已产出过（撤销建造的安全闸）
         self.under_construction = False      # 建造作业进行中（不耗料/不产出）
@@ -32,17 +36,24 @@ class Facility:
         self.halt_reason: Optional[str] = None
         self.mothballed = False              # 封存：不运转、不消耗维护件
         self.upkeep = 100.0                  # 设备状态 0~100（维护系统结算）
+        self.unit_progress = 0.0             # 单元装配进度（0~1，unit_factory 用）
+        self.stored = 0.0                    # 堆存量（sink 用）
+        self.backlog_over: Optional[str] = None   # 因哪种副产物积压而限产
 
     def to_dict(self) -> dict:
         return {"id": self.id, "plot_id": self.plot_id, "def_id": self.def_id,
                 "name": self.name, "assigned": list(self.assigned),
                 "stall_reason": self.stall_reason,
+                "stall_code": self.stall_code,
                 "produced_any": self.produced_any,
                 "under_construction": self.under_construction,
                 "halt_until": self.halt_until,
                 "halt_reason": self.halt_reason,
                 "mothballed": self.mothballed,
                 "upkeep": self.upkeep,
+                "unit_progress": self.unit_progress,
+                "stored": self.stored,
+                "backlog_over": self.backlog_over,
                 "fuel": self.fuel}
 
     @classmethod
@@ -50,12 +61,16 @@ class Facility:
         f = cls(data["id"], data["plot_id"], data["def_id"], data["name"])
         f.assigned = list(data.get("assigned", []))
         f.stall_reason = data.get("stall_reason")
+        f.stall_code = data.get("stall_code")
         f.produced_any = bool(data.get("produced_any", False))
         f.under_construction = bool(data.get("under_construction", False))
         f.halt_until = float(data.get("halt_until", 0.0) or 0.0)
         f.halt_reason = data.get("halt_reason")
         f.mothballed = bool(data.get("mothballed", False))
         f.upkeep = float(data.get("upkeep", 100.0) or 0.0)
+        f.unit_progress = float(data.get("unit_progress", 0.0) or 0.0)
+        f.stored = float(data.get("stored", 0.0) or 0.0)
+        f.backlog_over = data.get("backlog_over")
         f.fuel = data.get("fuel")
         return f
 
@@ -64,17 +79,40 @@ class IndustrySystem:
     def __init__(self, facility_defs: List[dict], recipes: List[dict],
                  heat_values: Optional[Dict[str, float]] = None,
                  fuel_classes: Optional[Dict[str, str]] = None,
-                 mothball_restart_sec: float = 10.0) -> None:
+                 mothball_restart_sec: float = 10.0,
+                 ref_grades: Optional[Dict[str, float]] = None,
+                 backlog: Optional[dict] = None) -> None:
         self.defs: Dict[str, dict] = {d["id"]: d for d in facility_defs}
         self.recipes: Dict[str, dict] = {r["id"]: r for r in recipes}
         self.facilities: Dict[str, Facility] = {}
         self.heat_values: Dict[str, float] = heat_values or {}
         self.fuel_classes: Dict[str, str] = fuel_classes or {}
+        # 品位归一基准（P1 ①）：产出 = 标称 × clamp(品位/基准, 0.25, 2.0)
+        self.ref_grades: Dict[str, float] = ref_grades or {}
+        # 副产物积压（批次3）：超限则限产；policy=ignore 时完全关闭
+        bl = backlog or {}
+        self.backlog_limits: Dict[str, float] = {
+            k: float(v) for k, v in (bl.get("limits") or {}).items()}
+        self.backlog_min_factor = float(bl.get("min_factor", 0.15))
+        self.backlog_policy = str(bl.get("policy_default", "throttle"))
         self.last_build: Optional[dict] = None   # 最近一次建造快照（撤销用）
         self.instant_build = False               # True=调试：建造即时完成
         self.default_build_time = 8.0            # 设施未配 build_time 时的兜底
         self.mothball_restart_sec = float(mothball_restart_sec)
         self._seq = 0
+
+    # ---- 品位折算（P1 ①）-------------------------------------------
+    def grade_factor(self, substance: Optional[str], grade: float) -> float:
+        """品位因子：以各物质的中位品位为基准，clamp 到 [0.25, 2.0]。
+
+        基准品位写在各物质的 ref_grade（content/substances.json）：
+        中位品位的矿恰好是标称产量；贫矿最低打到 25%，富矿最高翻倍。
+        没有基准（如水源）→ 恒为 1.0。
+        """
+        ref = float(self.ref_grades.get(substance or "", 0.0) or 0.0)
+        if ref <= 0:
+            return 1.0
+        return max(0.25, min(2.0, float(grade) / ref))
 
     def start(self, engine: object) -> None:
         self._engine = engine
@@ -122,18 +160,27 @@ class IndustrySystem:
         plot = engine.world.get(plot_id)
         if plot is None:
             return f"地块不存在: {plot_id}"
-        if plot.state != Plot.STATE_CLAIMED:
-            return "该地块尚未占领（先 claim）。"
         d = self.defs.get(def_id)
         if d is None:
             return f"未知设施: {def_id}"
+        # PLOT_BUILD-1 修复：先看"这块地上有没有设施"，再谈状态，避免
+        # developed/depleted 地块被误报成"尚未占领"。
+        existing = next((f for f in self.facilities.values()
+                         if f.plot_id == plot_id), None)
+        if existing is not None:
+            return (f"该地块已有设施（{existing.id} {existing.name}）——"
+                    "一地块一设施，请另选地块或用 demolish 拆除。")
+        if plot.state in (Plot.STATE_UNKNOWN, Plot.STATE_KNOWN):
+            return "该地块尚未占领（先 claim）。"
+        if plot.state not in (Plot.STATE_CLAIMED, Plot.STATE_DEVELOPED,
+                              Plot.STATE_DEPLETED):
+            return f"该地块当前状态（{plot.state}）不可建造。"
+        # 允许在 depleted（采空）与"设施已拆除的 developed"地块重建
         if plot.kind not in d.get("allowed_plot_kinds", []):
             return f"{d['name']} 不能建在 {plot.kind} 地块上。"
         missing = self._require_recovery(engine, def_id)
         if missing is not None:
             return f"知识缺失：需先从数据库恢复 {missing} 才能建造。"
-        if any(f.plot_id == plot_id for f in self.facilities.values()):
-            return "该地块已有设施。"
         cost = d.get("build_cost", {})
         # 非即时建造：先占单元（因此先判空，避免白扣资源）
         unit = None
@@ -285,6 +332,45 @@ class IndustrySystem:
                    + ("（施工已中止，单元回收）。" if was_building else "。"))
         return None
 
+    def demolish(self, engine: object, fac_id: str,
+                 refund: float = 0.5) -> Optional[str]:
+        """拆除设施（P1 ③）：返还 refund 比例材料，地块恢复可建。
+
+        与 undo 的区别：undo 只允许"刚建且未产出过"，demolish 对任何设施都可用
+        （但只返还一半材料，防止"建造→产出→拆掉"套利）。
+        施工中的设施走 undo（全额返还 + 中止作业）。
+        """
+        f = self.facilities.get(fac_id)
+        if f is None:
+            return f"设施不存在: {fac_id}"
+        if f.under_construction:
+            snap = getattr(self, "last_build", None)
+            if snap and snap.get("fac_id") == fac_id:
+                return self.undo_build(engine)      # 施工中：全额返还
+        d = self.defs.get(f.def_id, {})
+        cost = d.get("build_cost", {}) or {}
+        # 释放执行单元
+        for uid in list(f.assigned):
+            u = engine.units.get(uid)
+            if u is not None:
+                u.release()
+        f.assigned.clear()
+        back = {k: float(v) * float(refund) for k, v in cost.items()}
+        for rid, amt in back.items():
+            if amt > 0:
+                engine.economy.add(rid, amt)
+        self.facilities.pop(f.id, None)
+        if getattr(self, "last_build", None) and \
+                self.last_build.get("fac_id") == fac_id:
+            self.last_build = None
+        plot = engine.world.get(f.plot_id)
+        if plot is not None and plot.state == Plot.STATE_DEVELOPED:
+            plot.state = Plot.STATE_CLAIMED          # 腾出来可再建
+        back_txt = "、".join(f"{k} {v:g}" for k, v in back.items() if v > 0) or "无"
+        engine.log(f"[工业] 已拆除 {f.name} @{f.plot_id}，返还 {back_txt}"
+                   f"（{int(refund * 100)}%）—— 地块可重新规划。")
+        return None
+
     # ---- 单元效能（批次1：效率科技）--------------------------------
     def _staff_factor(self, engine: object, f: "Facility", d: dict) -> float:
         """派员比例 × 单元效能 → 产能/速度倍率。
@@ -368,7 +454,7 @@ class IndustrySystem:
                 continue                    # 封存：不运转、不消耗
             if f.halt_until > now:
                 self._report_stall(engine, f, True,
-                                   f.halt_reason or "停机检修")
+                                   f.halt_reason or "停机检修", "halted")
                 stat_bump(engine, "stall_seconds", dt)
                 continue
             if f.halt_reason == "封存重启中":
@@ -383,7 +469,8 @@ class IndustrySystem:
             d = self.defs[f.def_id]
             # 恢复条目丢失 → 设施失忆停摆（需重新恢复才能开工）
             if self._require_recovery(engine, f.def_id) is not None:
-                self._report_stall(engine, f, True, "知识条目已丢失")
+                self._report_stall(engine, f, True, "知识条目已丢失",
+                                   "knowledge_lost")
                 continue
             # 注意：不再在此处无条件清除停摆状态（那会与下方各 tick 的
             # 真实判定互相抵消，导致"停摆/恢复"日志与统计每 tick 抖动）。
@@ -394,8 +481,141 @@ class IndustrySystem:
                 self._tick_burner(engine, f, d, dt, pmul, umul)
             elif d.get("kind") == "renewable":
                 self._tick_renewable(engine, f, d, dt, pmul, umul)
+            elif d.get("kind") == "unit_factory":
+                self._tick_unit_factory(engine, f, d, dt, pmul, umul)
+            elif d.get("kind") == "vent":
+                self._tick_vent(engine, f, d, dt, umul)
+            elif d.get("kind") == "sink":
+                self._tick_sink(engine, f, d, dt, umul)
             else:
                 self._tick_recipe(engine, f, d, dt, pmul, umul)
+
+    # ---- 副产物积压（批次3）-----------------------------------------
+    def backlog_factor(self, engine: object, recipe: dict) -> float:
+        """副产物积压 → 限产系数（policy=ignore 时恒为 1.0）。"""
+        if self.backlog_policy == "ignore" or not self.backlog_limits:
+            return 1.0
+        factor = 1.0
+        for rid in (recipe.get("byproducts") or {}):
+            limit = self.backlog_limits.get(rid)
+            if not limit or limit <= 0:
+                continue
+            stock = engine.economy.get(rid)
+            if stock > limit:
+                factor *= max(self.backlog_min_factor,
+                              min(1.0, limit / stock))
+        return factor
+
+    def backlog_status(self, engine: object) -> Dict[str, dict]:
+        """各受限副产物的当前状态（供 report/UI 展示）。"""
+        out = {}
+        for rid, limit in self.backlog_limits.items():
+            stock = engine.economy.get(rid)
+            out[rid] = {"stock": round(stock, 1), "limit": limit,
+                        "over": stock > limit,
+                        "factor": round(max(self.backlog_min_factor,
+                                            min(1.0, limit / stock))
+                                        if stock > limit else 1.0, 3)}
+        return out
+
+    def _note_backlog(self, engine: object, f: Facility, over: str) -> None:
+        """积压限产的进入/退出只记一次日志（避免刷屏）。"""
+        if over and f.backlog_over != over:
+            f.backlog_over = over
+            engine.log(f"[工业] {f.name} 因 {over} 积压而限产"
+                       f"（政策 {self.backlog_policy}）—— 给它找出路："
+                       "转化(水煤气变换)／放空塔／回注井，或建更多下游。",
+                       level="warn", category=f"fac:{f.id}")
+        elif not over and f.backlog_over:
+            f.backlog_over = None
+            engine.log(f"[工业] {f.name} 积压缓解，恢复满产。",
+                       recover=f"fac:{f.id}")
+
+    def _tick_vent(self, engine: object, f: Facility, d: dict,
+                   dt: float, umul: float = 1.0) -> None:
+        """放空塔（手段②）：销毁列表中的副产物，解除积压（材料被浪费）。"""
+        pwr = float(d.get("power_use", 0.0)) * dt * umul
+        if pwr > 0 and self._consume(engine, {"electricity": pwr}) <= 0:
+            self._report_stall(engine, f, True, "缺电", "no_power")
+            return
+        rate = float(d.get("vent_rate", 1.0)) * dt * umul
+        total = 0.0
+        for rid in d.get("vent_substances", []):
+            stock = engine.economy.get(rid)
+            if stock <= 0:
+                continue
+            # 优先处理最"超限"的那种；其它也顺带放掉一部分
+            take = min(rate, stock)
+            if take > 0:
+                engine.economy.take(rid, take)
+                total += take
+                stat_bump(engine, "vented", take)
+        if total <= 0:
+            self._report_stall(engine, f, True, "无可放空物", "no_vent_target")
+            return
+        self._report_stall(engine, f, False, "")
+
+    def _tick_sink(self, engine: object, f: Facility, d: dict,
+                   dt: float, umul: float = 1.0) -> None:
+        """回注井/堆场（手段③）：把副产物压进地下，容量满了就停。"""
+        cap = float(d.get("capacity", 1000.0))
+        if f.stored >= cap:
+            self._report_stall(engine, f, True, "堆场已满", "sink_full")
+            return
+        pwr = float(d.get("power_use", 0.0)) * dt * umul
+        if pwr > 0 and self._consume(engine, {"electricity": pwr}) <= 0:
+            self._report_stall(engine, f, True, "缺电", "no_power")
+            return
+        rate = float(d.get("sink_rate", 1.0)) * dt * umul
+        moved = 0.0
+        for rid in d.get("sink_substances", []):
+            if f.stored >= cap:
+                break
+            stock = engine.economy.get(rid)
+            if stock <= 0:
+                continue
+            take = min(rate - moved, stock, cap - f.stored)
+            if take <= 0:
+                break
+            engine.economy.take(rid, take)
+            f.stored += take
+            moved += take
+            stat_bump(engine, "sunk", take)
+        if moved <= 0:
+            self._report_stall(engine, f, True, "无可回注物", "no_sink_target")
+            return
+        self._report_stall(engine, f, False, "")
+
+    def _tick_unit_factory(self, engine: object, f: Facility, d: dict,
+                           dt: float, pmul: float = 1.0,
+                           umul: float = 1.0) -> None:
+        """执行单元装配厂（P1 ②b1）：消耗钢/铜/电，攒够进度产出一个单元。"""
+        recipe = self.recipes.get(d.get("recipe", ""))
+        rate = float(d.get("unit_rate", 0.0))
+        if recipe is None or rate <= 0:
+            self._report_stall(engine, f, True, "未配置单元产能", "no_unit_rate")
+            return
+        rate_mul = dt * umul
+        need = {rid: float(r) * rate_mul
+                for rid, r in recipe.get("inputs", {}).items()}
+        factor = self._consume(engine, need)
+        missing = not need or factor <= 0
+        self._report_stall(engine, f, missing, "输入不足",
+                           "no_input" if missing else "")
+        if factor <= 0:
+            return
+        f.unit_progress += rate * dt * umul * factor * pmul
+        made = 0
+        while f.unit_progress >= 1.0:
+            f.unit_progress -= 1.0
+            engine.units.add_unit("执行器-装配")
+            made += 1
+        f.produced_any = True
+        if made:
+            stat_bump(engine, "units_built", made)
+            engine.log(f"[工业] {f.name} 装配完成 {made} 个执行单元"
+                       f"（现共 {engine.units.count()} 个）。",
+                       recover=f"fac:{f.id}")
 
     def _consume(self, engine: object, need: Dict[str, float]) -> float:
         """按需按可用比例尽力消耗，返回实际比例 [0,1]。"""
@@ -416,7 +636,7 @@ class IndustrySystem:
                      umul: float = 1.0) -> None:
         recipe = self.recipes.get(d.get("recipe", ""))
         if recipe is None:
-            self._report_stall(engine, f, True, "未配置配方")
+            self._report_stall(engine, f, True, "未配置配方", "no_recipe")
             return
         # 单元效能提高节拍：输入与输出同乘（化学配比不变，只是更快）
         rate_mul = dt * umul
@@ -424,9 +644,23 @@ class IndustrySystem:
                 for rid, r in recipe.get("inputs", {}).items()}
         factor = self._consume(engine, need)
         missing = not need or factor <= 0
-        self._report_stall(engine, f, missing, "输入不足")
+        self._report_stall(engine, f, missing, "输入不足",
+                           "no_input" if missing else "")
         if factor <= 0:
             return
+        # 副产物积压限产（批次3）：超限则整台设施降速（含主产物）
+        bfac = self.backlog_factor(engine, recipe)
+        if bfac < 1.0:
+            worst = max(
+                (rid for rid in (recipe.get("byproducts") or {})
+                 if self.backlog_limits.get(rid)
+                 and engine.economy.get(rid) > self.backlog_limits[rid]),
+                key=lambda rid: engine.economy.get(rid) / self.backlog_limits[rid],
+                default=None)
+            self._note_backlog(engine, f, worst or "")
+        else:
+            self._note_backlog(engine, f, "")
+        factor *= bfac
         for rid, rate in recipe.get("outputs", {}).items():
             engine.economy.add(rid, float(rate) * rate_mul * factor * pmul)
         # 副产物（byproducts: id→每产出主产物*时间的量；此处按 dt 产率）
@@ -445,11 +679,16 @@ class IndustrySystem:
         pwr = float(d.get("power_use", 0.0)) * dt * umul
         need = {"electricity": pwr} if pwr > 0 else {}
         factor = self._consume(engine, need)
-        self._report_stall(engine, f, (need and factor <= 0), "缺电")
+        self._report_stall(engine, f, (need and factor <= 0), "缺电",
+                           "no_power" if (need and factor <= 0) else "")
         if need and factor <= 0:
             return
         rate = float(d.get("extract_rate", 0.0))
-        out = rate * dt * pmul * umul * factor
+        if plot.kind == Plot.KIND_WATER:
+            gmul = 1.0
+        else:
+            gmul = self.grade_factor(plot.substance, plot.grade)
+        out = rate * dt * pmul * umul * factor * gmul
         if plot.kind == Plot.KIND_WATER:
             sub = "water"
         else:
@@ -471,7 +710,7 @@ class IndustrySystem:
                      umul: float = 1.0) -> None:
         """燃烧发电：烧当前燃料，产电 = 消耗×热值×效率。"""
         if not f.fuel:
-            self._report_stall(engine, f, True, "未设置燃料(set fuel)")
+            self._report_stall(engine, f, True, "未设置燃料(set fuel)", "no_fuel_set")
             return
         hv = self.heat_values.get(f.fuel)
         if not hv or hv <= 0:
@@ -489,7 +728,7 @@ class IndustrySystem:
         # 尽力烧（仓库不足按比例）
         avail = engine.economy.get(f.fuel)
         if avail <= 0:
-            self._report_stall(engine, f, True, f"缺燃料 {f.fuel}")
+            self._report_stall(engine, f, True, f"缺燃料 {f.fuel}", "no_fuel")
             return
         self._report_stall(engine, f, False, "")
         consumed = min(burn_rate * dt * umul, avail)
@@ -518,7 +757,8 @@ class IndustrySystem:
             else 1.0
         cap = float(d.get("capacity", 0.0))
         if cap <= 0:
-            self._report_stall(engine, f, True, "未配置产能(capacity)")
+            self._report_stall(engine, f, True, "未配置产能(capacity)",
+                               "no_capacity")
             return
         # 可再生发电只随其专属事件键(昼夜)波动，不再叠乘通用 production
         # （避免沙暴 production×0.6 与 wind×1.5 互相抵消）；效能按运维水平折算
@@ -580,17 +820,19 @@ class IndustrySystem:
         engine.log(f"[工业] {plot.id} 资源枯竭，{f.name} 停止并拆除。")
 
     def _report_stall(self, engine: object, f: Facility, stalled: bool,
-                      reason: str) -> None:
+                      reason: str, code: str = "") -> None:
         cat = f"fac:{f.id}"
         if stalled and not f.stalled_reported:
             f.stalled_reported = True
             f.stall_reason = reason
+            f.stall_code = code or None
             stat_bump(engine, "stall_events")
             engine.log(f"[工业] {f.name} 停摆：{reason}。",
                        level="warn", category=cat)
         elif not stalled and f.stalled_reported:
             f.stalled_reported = False
             f.stall_reason = None
+            f.stall_code = None
             engine.log(f"[工业] {f.name} 恢复运转。", recover=cat)
 
     # ---- 查询 ------------------------------------------------------
@@ -598,20 +840,22 @@ class IndustrySystem:
         return list(self.facilities.keys())
 
     def power_balance(self, engine: object) -> dict:
-        """全厂电力预算：产电 vs 耗电（用于 UI 诊断，M3 建议落实）。
+        """全厂电力预算：产电 vs 耗电（用于 UI 诊断）。
 
-        返回 {"produce": float/s, "consume": float/s,
-              "consumers": [(name, amount), ...],
-              "producers": [(name, amount), ...]}。
-        burner/renewable 按其当前燃料/环境×昼夜折算，便于状态栏与电力专页。
+        **实际 vs 额定**（POWER-1 修复）：停摆的设施不再计入 actual —— 否则会
+        出现"面板显示盈余、设施却报缺电"的自相矛盾。返回：
+            produce/consume          实际值（停摆设施已排除）
+            produce_rated/consume_rated  若全部设施都正常运转的额定值
+            consumers/producers      实际明细（供 UI 列最大耗电者）
         """
         getter = getattr(engine.registry, "get", None)
         env = getter("environment") if getter else None
         dl = getter("daylight") if getter else None
-        produce = 0.0
-        consume = 0.0
+        produce = consume = 0.0
+        produce_rated = consume_rated = 0.0
         consumers = []
         producers = []
+        now = float(engine.clock.time)
         for f in self.facilities.values():
             if not f.assigned:
                 continue                    # 未运转不耗电
@@ -620,14 +864,18 @@ class IndustrySystem:
                 continue
             if f.under_construction:
                 continue                    # 建造中不耗电/不发电
-            if f.mothballed or f.halt_until > float(engine.clock.time):
+            if f.mothballed or f.halt_until > now:
                 continue                    # 封存/停机检修不耗电、不发电
+            # live=False 表示"这一拍它其实是停摆的"（缺输入/缺燃料/缺电/知识丢失）
+            live = not f.stalled_reported
             sf = self._staff_factor(engine, f, d)     # 单元效能倍率
             if d.get("extract_rate"):
                 c = float(d.get("power_use", 0.0)) * sf
                 if c > 0:
-                    consume += c
-                    consumers.append((f.name, c))
+                    consume_rated += c
+                    if live:
+                        consume += c
+                        consumers.append((f.name, c))
             elif d.get("kind") == "burner":
                 # 燃烧发电：燃料热值 × 燃速 × 效率 × 环境生产倍率
                 hv = self.heat_values.get(f.fuel or "", 0.0)
@@ -638,36 +886,84 @@ class IndustrySystem:
                     pmul = env.effect("production") if env is not None else 1.0
                     out = (float(d.get("burn_rate", 0.5)) * hv
                            * float(d.get("burn_efficiency", 0.4)) * pmul * sf)
-                    produce += out
-                    producers.append((f.name, out))
+                    produce_rated += out
+                    if live:
+                        produce += out
+                        producers.append((f.name, out))
             elif d.get("kind") == "renewable":
                 pk = d.get("power_kind", "solar")
                 emul = env.effect(pk) if env is not None else 1.0
                 dmul = (dl.effect("solar")
                         if dl is not None and pk in ("solar", "pv") else 1.0)
                 out = float(d.get("capacity", 0.0)) * emul * dmul * sf
-                produce += out
-                producers.append((f.name, out))
+                produce_rated += out
+                if live and out > 0:
+                    produce += out
+                    producers.append((f.name, out))
+            elif d.get("kind") == "unit_factory":
+                r = self.recipes.get(d.get("recipe", ""), {})
+                for rid, rate in r.get("inputs", {}).items():
+                    if rid == "electricity" and float(rate) > 0:
+                        consume_rated += float(rate) * sf
+                        if live:
+                            consume += float(rate) * sf
+                            consumers.append((f.name, float(rate) * sf))
+            elif d.get("kind") in ("vent", "sink"):
+                c = float(d.get("power_use", 0.0)) * sf
+                if c > 0:
+                    consume_rated += c
+                    if live:
+                        consume += c
+                        consumers.append((f.name, c))
             else:
                 r = self.recipes.get(d.get("recipe", ""), {})
                 for rid, rate in r.get("inputs", {}).items():
                     if rid == "electricity" and float(rate) > 0:
-                        consume += float(rate) * sf
-                        consumers.append((f.name, float(rate) * sf))
+                        consume_rated += float(rate) * sf
+                        if live:
+                            consume += float(rate) * sf
+                            consumers.append((f.name, float(rate) * sf))
                 for rid, rate in r.get("outputs", {}).items():
                     if rid == "electricity":
-                        produce += float(rate) * sf
-                        producers.append((f.name, float(rate) * sf))
+                        produce_rated += float(rate) * sf
+                        if live:
+                            produce += float(rate) * sf
+                            producers.append((f.name, float(rate) * sf))
         return {"produce": produce, "consume": consume,
+                "produce_rated": produce_rated,
+                "consume_rated": consume_rated,
+                "produce_actual": produce, "consume_actual": consume,
                 "consumers": consumers, "producers": producers}
+
+    # ---- 死锁体检（READLOCK-1：读档落到"无燃料 + 无电 + 采矿需电"）------
+    def power_deadlock(self, engine: object) -> Optional[str]:
+        """返回死锁描述；不处于死锁则 None。"""
+        bal = self.power_balance(engine)
+        if bal["produce"] > 0:
+            return None
+        if engine.economy.get("electricity") > 30.0:
+            return None                     # 储备还够撑一阵
+        burnable = [s for s in self.heat_values if engine.economy.get(s) > 1.0]
+        if burnable:
+            return None                     # 还有燃料可切（燃料类别可能不符，但玩家可试）
+        mines = [f for f in self.facilities.values()
+                 if self.defs[f.def_id].get("extract_rate")
+                 and not f.under_construction]
+        if not mines:
+            return None
+        return ("无人在发电、电力储备见底、库存里没有任何可燃物，"
+                "而采掘设施需要电才能采煤 —— 形成闭环死锁")
 
     # ---- 存档 ------------------------------------------------------
     def to_dict(self) -> dict:
         return {"seq": self._seq,
+                "backlog_policy": self.backlog_policy,
                 "facilities": [f.to_dict() for f in self.facilities.values()]}
 
     def load(self, data: dict) -> None:
         self._seq = int(data.get("seq", 0))
+        self.backlog_policy = str(data.get("backlog_policy",
+                                           self.backlog_policy))
         self.facilities = {}
         for fd in data.get("facilities", []):
             f = Facility.from_dict(fd)

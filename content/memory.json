@@ -3,9 +3,9 @@
  "max_integrity": 100.0,
  "degrade_per_sec": 0.02,
  "degrade_scale": {
-  "per_fixated_entry": 0.002,
+  "per_fixated_entry": 0.003,
   "per_running_facility": 0.004,
-  "_comment": "基线 0.02/s（满值约 83 分钟归零）；12 条主线固化 + 12 台运转 ≈ 0.092/s（约 18 分钟归零）；终局 12 条 + 22 台 ≈ 0.132/s。"
+  "_comment": "基线 0.02/s；per_fixated_entry 从 0.002 提到 0.003，是 P1 ④ 的补偿：运转口径改为「真正运转」（排除停摆/停机）后，用条目项把压力补一部分回来。14 条主线固化 + 12 台运转 ≈ 0.09/s。"
  },
  "warn_threshold": 30.0,
  "crisis_threshold": 10.0,

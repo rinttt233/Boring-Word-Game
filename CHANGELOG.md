@@ -152,6 +152,87 @@
 
 ---
 
+## v1.3.1 — 品位接入 · 单元扩容 · 拆除复用 · 记忆口径 · 副产物积压
+
+**日期**：2026-09-13
+**归档**：`_refactor_backup/v1.3.1_20260913-075914/`
+**发布快照**：`releases/v1.3.1/`（工作区内独立文件夹，已排除自身/存档/备份/缓存）
+**主题**：把另一会话 AI 通关试玩报告里的**缺陷**与**结构性瓶颈**一次修完 —— 并让"品位/圈层/单元/副产物"这些原本只是显示或无限堆积的东西，真正参与玩法。
+**说明**：按你的指令以 **1.3.1（小修补）** 发布；但本次改动含新内容与新机制（主线 13→14 条），
+若你更希望它作为大版本，可在下次发版时把版本号语义调整为 1.4（内容与快照无需改动）。
+
+### 一、主要改动
+
+**1. P0 试玩报告补丁（缺陷修复，不改平衡）**
+- **CRASH-1**：`ui/commands.py:_cmd_db` 在"5/5 竣工但尚未迁移"时对 `next_project()` 的 None 取下标崩溃 → 判空，
+  并输出"全部子系统已竣工，可执行 migrate"。
+- **MIGRATED-1**：`DatabaseSystem` 新增 `migrated`（随存档，旧档用 `complete` 兜底）；`report` 中
+  `can_migrate`（=子系统建完）与 `migrated`/`complete`（=已迁移）语义分离；**顶层新增 `victory`**；
+  劣化终止后 `degrade` 输出 0.0 并保留 `degrade_rated`。
+- **POWER-1**：`power_balance` 排除**停摆**设施（原先把"没燃料的电站"仍算作产电，导致面板"盈余却全厂缺电"）；
+  `produce/consume` = 实际值，另给 `produce_rated/consume_rated`。
+- **PLOT_BUILD-1**：建造判定改为**先看该地块有没有设施**（`developed` 有设施 → "该地块已有设施"，
+  不再误报"尚未占领"）；**depleted（采空）地块允许重建**。
+- **READLOCK-1**：新增 `IndustrySystem.power_deadlock()` 体检；读档后自检并在死锁时
+  **一次性发放应急煤 30t**（记入 `stats.emergency_starts`，一局只发一次）；`agent_play` 启动也做同一体检。
+- **LOCK_RULE-1（部分）**：`Facility.stall_code` 机器可读停摆码（`no_input/no_power/no_fuel/no_fuel_set/
+  fuel_class/no_recipe/no_capacity/knowledge_lost/halted/no_unit_rate/sink_full/...`），`report` 以 `reason_code` 输出。
+- `report` 增 `seed`（`main.py --seed N` 写入引擎）、`command_count`、`deadlock` 字段。
+- 另修：`report` 在"维护启用但无设施"时 `round(None)` 崩溃；`victory_test` 未锁天气导致的偶发失败。
+
+**2. P1 结构性调整（按用户决策）**
+- **①品位接入产出**：`产出 = 标称 × clamp(grade/ref_grade, 0.25, 2.0) × 效能 × 环境 × 供电比例`；
+  `ref_grade` = 各矿区间中位值（14 种，写进 `content/substances.json`）。
+  中位品位＝标称产量，贫矿最多 −75%、富矿最多 +100%；**物流惩罚仍只显示**（UI/向导/FAQ 已标注"预留"）。
+- **②单元扩容**：新主线 `db_units`（第 14 条）解锁「**执行单元装配厂**」（钢 0.08/s + 铜 0.05/s + 电 0.6/s，
+  0.005 单元/s = 1 个 / 200 s，受单元效能加速）；**每永久固化 2 条主线条目 +1 执行单元（上限 +6）**。
+- **③拆除与复用**：`demolish <设施id>`（建筑面板亦有按钮）返还 **50%** 建造成本、释放单元、地块恢复可建；
+  施工中拆除走 `undo`（全额退料）；`depleted` 地块可重建。
+- **④记忆口径修正**：`_running_facility_count` 只统计**真正运转**的设施（排除停摆/停机），
+  与文档一致；`per_fixated_entry` 0.002 → **0.003** 作压力补偿。
+
+**3. 批次3：副产物积压 + 四种应对**
+- 新增 `content/backlog.json`：阈值 焦炉煤气 400／煤焦油 200／高炉煤气 600／裂解干气 300／氢 500／钒 200；
+  超限时产出它的设施按 `clamp(阈值/库存, 0.15, 1.0)` **限产**（进入/退出各记录一次日志）。
+- 四种应对：**①转化** 水煤气变换炉（新设施 `gas_shift`：煤气+水→氢）；**②放空** 放空塔
+  （新设施 `vent_tower`，1.5/s 销毁，随 `db_coking` 解锁）；**③回注** 回注井（新设施 `injection_well`，
+  2/s 堆存、容量 2000，装满即停）；**④政策开关** `policy backlog throttle|ignore`。
+- 观测与提示：`report.backlog`、物料页 `!积压` 标记与出路提示、建筑详情显示放空对象/堆存进度/因积压限产、
+  `suggest` 直接建议"建哪种出路"。
+
+### 二、影响范围
+- **玩法**：品位真正决定采掘速率（勘探选址开始有意义）；单元不再是固定资源（装配厂 + 主线奖励）；
+  设施可拆除重规划；副产物不再是免费堆积（不处理会限产，但有四种对策）。
+- **内容**：主线 **13 → 14 条**（新增 `db_units`）；新增设施 **3 个**（装配厂 48 项设施中的新增项、
+  放空塔、回注井、水煤气变换炉共 4 个：设施总数 44 → 48）；新增配方 2 条（`assemble_unit`、`shift_gas`）；
+  新增物质字段 `ref_grade`（14 种）；新增配置 `content/backlog.json`；
+  百科词条 224 → **232**（新增教程《副产物积压怎么办》，重写 FAQ《产量不达标》《建不了设施》）。
+- **界面**：建筑面板新增「拆除」按钮；建筑详情显示品位折算产出、放空/堆存状态、因积压限产；
+  物料页显示副产物积压与出路；`help` 增 `demolish`/`policy` 说明。
+- **接口**：`report` 增 `victory`/`can_migrate`/`migrated`/`complete`/`degrade_rated`/`seed`/`command_count`/
+  `deadlock`/`backlog` 与设施级 `reason_code`/`stored`/`unit_progress`/`backlog_over`；新增命令
+  `demolish`、`policy`；盲测覆盖清单 22 → **26 项**。
+- **存档兼容**：全部新字段都有默认值（`database.migrated`、`recovery.unit_bonus_granted`、
+  `facility.{unit_progress,stored,backlog_over,stall_code}`、`industry.backlog_policy`），**旧档可直接读取**，已由测试覆盖。
+- **测试**：单测 155 → **181 例**（新增 `tests/test_p0_fixes.py` 16、`tests/test_p1_content.py` 14、
+  `tests/test_backlog.py` 12）。
+
+### 三、验证
+- 单元测试：`python -X utf8 -m unittest discover -s tests` → **Ran 181 tests, OK**（发版门禁 `--check` 通过）。
+- GUI 自检：`python -X utf8 main.py --gui-selftest` → 通过。
+- 端到端脚本 9 个全 OK：`smoke_test`、`power_test`、`gameplay_test`、`chain_test`、
+  `tlb_test`、`tlc_test`、`tld_test`、`tle_test`、`victory_test`
+  （通关链现在覆盖：**14 条主线全固化** + 副产物处置（放空塔/水煤气变换炉）+ 残骸回收供料
+  + 数据库 5/5 + 烧录迁移）。
+- 修复项专项验证：`db` 在"5/5 未迁移"下不再崩溃；`report.database.migrated/victory` 迁移后为 true；
+  煤=0 时 `power_balance.produce = 0`（原为 1.60）；`depleted` 可重建；读档死锁触发一次性应急煤且不重复发放；
+  品位折算实测：圈1 品位 1.7% 与 95% 的矿产出比值 = 0.25 : 2.00（夹取边界）；
+  副产物超限时产出由 0.35/s 降至 0.17/s（限产）；放空塔 150 s 内把 500 煤焦炉煤气降到阈值以下。
+- 备份：`_refactor_backup/v1.3.1_20260913-075914/`（发版归档）、
+  `_refactor_backup/p0_fixes_20260913-073959/`、`_refactor_backup/p1_batch3_20260913-075537/`（回滚点）。
+
+---
+
 ## 未归档历史（仅备注，不追溯版本号）
 - 1.0 里程碑：内核（时钟/经济/世界/单元/作业/注册表）+ M1 生产闭环 + M2 恢复树与真实化工链 + M3 胜利线（可靠数据库）。
 - 1.1 里程碑：M4 拓展性验收（环境模块）+ TL-0 副产物与发电生态 + TL-A 电气化 + 若干 UI 重构（面板拆分、标签页容器）。

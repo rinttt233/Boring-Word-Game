@@ -71,6 +71,9 @@ class GuiUI:
         self.router = CommandRouter(engine, substance_map,
                                     on_quit=self._quit)
         self.router.speed = speed if speed > 0 else 1.0
+        # 裸命令 save / load（按钮栏与快捷键）→ 打开存档槽窗口
+        self.router.save_slot_hook = self.open_save_dialog
+        self.router.load_slot_hook = self.open_load_dialog
 
         self.root = tk.Tk()
         # 字体回退（缺 Segoe UI/Consolas 时换可用中文字体，避免豆腐块）
@@ -118,6 +121,9 @@ class GuiUI:
         self.root.bind("<F12>", lambda e: self._confirm_reset())
         # F11 = 调试面板
         self.root.bind("<F11>", lambda e: self._open_debug())
+        # F9 = 存档槽 / F10 = 读档槽（与按钮栏"存档/读档"同一窗口）
+        self.root.bind("<F9>", lambda e: self.open_save_dialog())
+        self.root.bind("<F10>", lambda e: self.open_load_dialog())
         # Ctrl+Z = 撤销上次建造
         self.root.bind("<Control-z>", lambda e: self.router.execute("undo"))
         self.root.protocol("WM_DELETE_WINDOW", self._quit)
@@ -393,6 +399,106 @@ class GuiUI:
         except tk.TclError:
             pass
 
+    # ================= 存档槽窗口（F9/F10 与按钮栏共用）=================
+    def _slot_dialog(self):
+        """当前仍打开的存档槽窗口（已关闭则清理引用）。"""
+        dlg = getattr(self, "_save_dialog", None)
+        if dlg is not None and getattr(dlg, "_closed", True):
+            self._save_dialog = None
+            return None
+        return dlg
+
+    def _dialog_closed(self) -> None:
+        self._save_dialog = None
+
+    def _open_slot_dialog(self, mode: str) -> None:
+        from ui.dialogs import SaveLoadDialog
+        cur = self._slot_dialog()
+        if cur is not None:
+            # 已有窗口（例如按 Esc 后立刻再按 F10）→ 直接聚焦，避免"点了没反应"
+            if cur.mode != mode:
+                cur.close()
+            else:
+                try:
+                    cur.dlg.lift()
+                    cur.dlg.focus_force()
+                except tk.TclError:
+                    pass
+                return
+        self._save_dialog = SaveLoadDialog(
+            self.root, self.engine, self.router, mode=mode,
+            on_done=self._after_load, on_close=self._dialog_closed)
+
+    def open_save_dialog(self) -> None:
+        self._open_slot_dialog("save")
+
+    def open_load_dialog(self) -> None:
+        self._open_slot_dialog("load")
+
+    def _after_load(self) -> None:
+        """读档后强制全刷新：engine.from_dict 换掉了 world/units/jobs，
+        面板里缓存的选中项与"是否需要重建"的签名都会变陈旧。"""
+        try:
+            plots = getattr(self, "_plots_panel", None)
+            if plots is not None:
+                plots.selected = None
+                plots._refresh_sig_prev = None
+                # 避免把刚载入的地块全部当成"新勘探"闪烁
+                plots._known_plot_ids = {p.id
+                                         for p in self.engine.world.visible_plots()}
+                plots._new_until = {}
+                plots._new_plots = set()
+            for host in (getattr(self, "left_host", None),
+                         getattr(self, "build_host", None),
+                         getattr(self, "right_host", None)):
+                if host is None:
+                    continue
+                for panel in getattr(host, "panels", []):
+                    if hasattr(panel, "selected"):
+                        panel.selected = None
+                    if hasattr(panel, "_refresh_sig_prev"):
+                        panel._refresh_sig_prev = None
+        except Exception as e:
+            self.engine.log(f"[读档] 刷新面板时出现问题: {e}")
+        # 重绘全部界面元素
+        for host in (getattr(self, "left_host", None),
+                     getattr(self, "build_host", None),
+                     getattr(self, "right_host", None)):
+            if host is None:
+                continue
+            try:
+                host.pump()
+            except tk.TclError:
+                pass
+        try:
+            self._flush_logs()
+            self._refresh_status()
+        except tk.TclError:
+            pass
+        self.engine.log("[读档] 界面已同步到载入的进度。")
+
+    def _locate_building(self, fac_id: str) -> None:
+        """地块面板双击 → 展开建筑栏、切到建筑页并选中该设施（快速定位）。"""
+        try:
+            if getattr(self, "build_pane", None) is not None \
+                    and self.build_pane.collapsed:
+                self.build_pane.toggle_collapse()
+            host = getattr(self, "build_host", None)
+            panel = getattr(self, "_build_panel", None)
+            if host is not None and panel is not None \
+                    and host.current is not panel:
+                try:
+                    host.select(panel.key)
+                except Exception:
+                    pass
+            if panel is not None and hasattr(panel, "select_facility"):
+                if panel.select_facility(fac_id):
+                    self.engine.log(f"[地块] 已定位建筑 {fac_id}。")
+                    return
+            self.engine.log(f"[地块] 建筑 {fac_id} 不在建筑栏中。")
+        except tk.TclError:
+            pass
+
     # ================= 四栏（可折叠 + 可拖分隔）=================
     def _build_panels(self) -> None:
         # 经典 tk.PanedWindow：支持 minsize + 黑白灰 sash（可拖拽分隔线）
@@ -429,12 +535,19 @@ class GuiUI:
         self.build_host.attach_prefs(self.prefs)
         self.build_pane.attach_prefs(self.prefs)
         bld_panel = self.build_host.current
+        self._build_panel = bld_panel     # 供地块→建筑跳转使用
         if bld_panel is not None:
             if hasattr(bld_panel, "attach_prefs"):
                 bld_panel.attach_prefs(self.prefs)
             # 定位地块：切回地块页并选中对应地块
             if hasattr(bld_panel, "locate"):
                 bld_panel.locate = self._locate_plot
+        # 反向跳转：地块面板双击 → 建筑栏选中该设施
+        if plots_panel is not None:
+            try:
+                plots_panel.locate_building = self._locate_building
+            except Exception:
+                pass
         add_pane(self.build_pane)
 
         # 右区（可折叠）
@@ -1314,7 +1427,7 @@ class GuiUI:
             except Exception:
                 avail, demand, worst = 0.0, 0.0, None
             low = demand > 0 and avail < demand * maint.warn_kit_seconds
-            worst_txt = "" if worst is None else f" 设备{worst:.0f}"
+            worst_txt = "" if worst is None else f" 设备最低 {worst:.0f}"
             self.maint_lbl.configure(
                 text=f"维护件 {avail:.1f} ({demand:.2f}/s){worst_txt}",
                 fg=T.WARN_FG if low else T.TEXT_SUB,

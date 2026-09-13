@@ -64,6 +64,10 @@ class BuildingsPanel(Refreshable, Panel):
         tsb = tk.Scrollbar(wrap, orient="vertical", command=self.tree.yview)
         tsb.pack(side="right", fill="y")
         self.tree.configure(yscrollcommand=tsb.set)
+        # 行内信息变长（在干什么/状态）→ 补横向滚动，避免内容被裁掉
+        hsb = tk.Scrollbar(wrap, orient="horizontal", command=self.tree.xview)
+        hsb.pack(side="bottom", fill="x")
+        self.tree.configure(xscrollcommand=hsb.set)
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
         # 双击设施 → 打开百科对应词条
         self.tree.bind("<Double-Button-1>", self._on_double)
@@ -96,6 +100,48 @@ class BuildingsPanel(Refreshable, Panel):
                 b.configure(bg=T.ACCENT, fg=T.WARN_FG)
             else:
                 b.configure(bg=T.PANEL, fg=T.TEXT)
+
+    # ---- 行内摘要："这台设施在干什么" ---------------------------------
+    @staticmethod
+    def _amt(v: float) -> str:
+        """储量紧凑写法：12345 → 12k。"""
+        if v >= 10000:
+            return f"{v / 1000:.0f}k"
+        if v >= 1000:
+            return f"{v / 1000:.1f}k"
+        return f"{v:g}"
+
+    def _activity_text(self, f, d, ind) -> str:
+        """采矿机 →煤 82k ｜ 焦炉 →焦炭 ｜ 发电机 →电 1.2/s 烧煤 ｜ 光伏 →电 2.0/s 光伏。"""
+        if d.get("extract_rate"):
+            plot = self.engine.world.get(f.plot_id)
+            if plot is None:
+                return ""
+            if plot.kind == "water":
+                return "→水 ∞"
+            sub = plot.substance or "scrap_alloy"
+            if plot.reserve <= 0:
+                return f"→{self.router.rname(sub)} 枯竭"
+            return f"→{self.router.rname(sub)} {self._amt(plot.reserve)}"
+        if d.get("kind") == "burner":
+            hv = float(ind.heat_values.get(f.fuel or "", 0.0) or 0.0)
+            if hv <= 0 or not f.fuel:
+                return "→电 未设燃料"
+            out = (float(d.get("burn_rate", 0.5)) * hv
+                   * float(d.get("burn_efficiency", 0.4)))
+            return f"→电 {out:.1f}/s 烧{self.router.rname(f.fuel)}"
+        if d.get("kind") == "renewable":
+            pk = {"solar": "光热", "pv": "光伏",
+                  "wind": "风电"}.get(d.get("power_kind"), "可再生")
+            return f"→电 {float(d.get('capacity', 0.0)):.1f}/s {pk}"
+        r = ind.recipes.get(d.get("recipe", ""))
+        outs = (r or {}).get("outputs", {})
+        if outs:
+            sub, rate = max(outs.items(), key=lambda kv: float(kv[1]))
+            if sub == "electricity":
+                return f"→电 {float(rate):.1f}/s"
+            return f"→{self.router.rname(sub)}"
+        return ""
 
     def _group_of(self, ind, f):
         """返回 (分组键, 显示名)——由当前分组维度决定。"""
@@ -262,6 +308,7 @@ class BuildingsPanel(Refreshable, Panel):
             self._open_by_key[gkey] = g_open
             for f in sorted(groups[gk], key=lambda x: x.id):
                 units = ",".join(f.assigned) or "-"
+                act = self._activity_text(f, ind.defs[f.def_id], ind)
                 stalled = ""
                 if f.under_construction:
                     left = ind.build_progress(self.engine, f.id)
@@ -278,12 +325,41 @@ class BuildingsPanel(Refreshable, Panel):
                     stalled = f" 设备{f.upkeep:.0f}"
                 plot = self.engine.world.get(f.plot_id)
                 ring = f"圈{plot.ring}" if plot is not None else "?"
+                head = f"{f.id} {f.name} {ring}"
+                if act:
+                    head += f" {act}"
                 iid = self.tree.insert(
                     gid, "end",
-                    text=f"{f.id} {f.name} {ring} 单元[{units}]{stalled}",
+                    text=f"{head} 单元[{units}]{stalled}",
                     tags=("fac",), values=(f.id,))
                 self._fac_map[iid] = f.id
                 self._open_by_key[iid] = True
+
+    def select_facility(self, fac_id: str) -> bool:
+        """按设施 id 在树中定位并选中（供地块面板双击跳转）。
+
+        会先按需重建树、展开其所属分组，选中后刷新详情与操作行。
+        """
+        ind = self.engine.registry.get("industry")
+        if ind is None or fac_id not in ind.facilities:
+            return False
+        if self._fac_map.get(self.selected) != fac_id:
+            self._rebuild()
+        for iid, fid in self._fac_map.items():
+            if fid != fac_id:
+                continue
+            parent = self.tree.parent(iid)
+            if parent:
+                self.tree.item(parent, open=True)
+                self._open_by_key[parent] = True
+            self.tree.selection_set(iid)
+            self.tree.see(iid)
+            self.tree.focus(iid)
+            self.selected = fac_id
+            self._render_detail()
+            self._render_actions()
+            return True
+        return False
 
     def _on_select(self, _evt=None):
         sel = self.tree.selection()
@@ -347,8 +423,24 @@ class BuildingsPanel(Refreshable, Panel):
         else:
             parts.append(f"已分配单元: {units}")
         if d.get("extract_rate"):
+            plot = self.engine.world.get(f.plot_id)
+            gf = 1.0
+            if plot is not None and plot.kind != "water" \
+                    and hasattr(ind, "grade_factor"):
+                gf = ind.grade_factor(plot.substance, plot.grade)
             parts.append(f"产出 {d['extract_rate']:g}/s "
-                         f"(耗电 {d.get('power_use', 0):g}/s)")
+                         f"(耗电 {d.get('power_use', 0):g}/s)"
+                         + (f"　实际 ≈{d['extract_rate'] * gf:g}/s"
+                            f"（品位折算 ×{gf:.2f}）" if gf != 1.0 else ""))
+        elif d.get("kind") == "unit_factory":
+            rate = float(d.get("unit_rate", 0.0))
+            r = ind.recipes.get(d.get("recipe", ""), {})
+            ins = ", ".join(f"{self.router.rname(k)} {v:g}/s"
+                            for k, v in r.get("inputs", {}).items())
+            parts.append(f"消耗: {ins}")
+            parts.append(f"产出: 执行单元 {rate:g}/s"
+                         f"（约 {1 / rate:.0f}s 一个）"
+                         f"　进度 {f.unit_progress:.0%}")
         elif d.get("recipe"):
             r = ind.recipes.get(d["recipe"], {})
             outs = ", ".join(f"{self.router.rname(k)} {v:g}/s"
@@ -359,6 +451,21 @@ class BuildingsPanel(Refreshable, Panel):
             parts.append(f"产出: {outs}")
         if d.get("kind") == "burner":
             parts.append(f"燃料: {f.fuel or '未设(用 fuel 命令)'}")
+        if d.get("kind") == "vent":
+            parts.append("放空对象: "
+                         + "、".join(self.router.rname(x) for x in
+                                     d.get("vent_substances", []))
+                         + f"　速率 {d.get('vent_rate', 0):g}/s（材料被烧掉）")
+        if d.get("kind") == "sink":
+            cap = float(d.get("capacity", 0.0))
+            parts.append("回注对象: "
+                         + "、".join(self.router.rname(x) for x in
+                                     d.get("sink_substances", []))
+                         + f"　堆存 {f.stored:g}/{cap:g}"
+                         f"（{f.stored / cap:.0%}，装满需再建）" if cap else "")
+        if getattr(f, "backlog_over", None):
+            parts.append(f"{T.S_WARN} 因「{self.router.rname(f.backlog_over)}」"
+                         "积压而限产")
         if f.stalled_reported:
             parts.append(f"{T.S_WARN} 停摆中：{f.stall_reason or '原因未知'}")
         self.detail_label.configure(text="\n".join(parts), fg=T.TEXT)
@@ -408,6 +515,9 @@ class BuildingsPanel(Refreshable, Panel):
         else:
             self._act_btn(row, "封存", lambda: self.router.execute(
                 f"mothball {self.selected}"))
+        # 拆除（P1 ③：返还一半材料，地块可重新规划）
+        self._act_btn(row, "拆除", lambda: self.router.execute(
+            f"demolish {self.selected}"))
         if d.get("kind") == "burner":
             # 按设施燃料类别白名单过滤（无白名单设施=全部可燃）
             if hasattr(ind, "fuel_options_for"):
@@ -480,10 +590,19 @@ class BuildingsPanel(Refreshable, Panel):
         ind = self.engine.registry.get("industry")
         if ind is None:
             return ()
+
+        def reserve_bucket(f):
+            """采掘设施：储量按 100 一档入签名，行内储量能缓慢跟着更新。"""
+            if not ind.defs.get(f.def_id, {}).get("extract_rate"):
+                return 0
+            plot = self.engine.world.get(f.plot_id)
+            return int((plot.reserve if plot is not None else 0.0) // 100)
+
         return tuple(sorted(
             (f.id, f.def_id, tuple(f.assigned), bool(f.stalled_reported),
              bool(f.under_construction), bool(f.mothballed),
-             f.halt_reason or "", round(float(f.upkeep), 1), f.fuel or "")
+             f.halt_reason or "", round(float(f.upkeep), 1),
+             reserve_bucket(f), f.fuel or "")
             for f in ind.facilities.values()))
 
     def _do_rebuild(self):

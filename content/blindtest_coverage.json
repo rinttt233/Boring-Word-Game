@@ -1,0 +1,161 @@
+{
+  "_comment": "盲测覆盖清单：每项断言都作用在 report JSON（变量名 r）上，一旦为真即永久记下（粘性）。断言只读、不改游戏状态。",
+  "items": [
+    {
+      "id": "survey",
+      "desc": "勘探发现新地块",
+      "assert": "len(r['plots']) >= 5",
+      "hint": "survey <圈层>"
+    },
+    {
+      "id": "claim",
+      "desc": "占领地块",
+      "assert": "any(p['state'] == 'claimed' for p in r['plots'])",
+      "hint": "claim <地块id>"
+    },
+    {
+      "id": "build",
+      "desc": "建造设施并完工",
+      "assert": "any(p['state'] == 'running' for p in r['facilities'])",
+      "hint": "build <地块> <设施> → @tick → assign"
+    },
+    {
+      "id": "building_wait",
+      "desc": "经历建造耗时（施工中状态）",
+      "assert": "r['stats'].get('stall_events', 0) >= 0 and r['stats'].get('play_seconds', 0) > 0",
+      "hint": "build 后立即 @view"
+    },
+    {
+      "id": "assign",
+      "desc": "派员使设施运转",
+      "assert": "r['units']['idle'] < r['units']['total']",
+      "hint": "assign <设施id>"
+    },
+    {
+      "id": "extract",
+      "desc": "采掘资源",
+      "assert": "any(f['def'] in ('extractor',) for f in r['facilities'])",
+      "hint": "在矿脉/水源上 build extractor"
+    },
+    {
+      "id": "fuel",
+      "desc": "给燃烧设施设置燃料",
+      "assert": "any(f.get('fuel') for f in r['facilities'])",
+      "hint": "fuel <设施id> <燃料id>"
+    },
+    {
+      "id": "stall",
+      "desc": "经历一次设施停摆",
+      "assert": "r['stats']['stall_seconds'] > 0",
+      "hint": "断供/缺电自然发生"
+    },
+    {
+      "id": "recover",
+      "desc": "恢复知识条目（临时可用）",
+      "assert": "len(r['entries']['active']) + len(r['entries']['permanent']) > 0",
+      "hint": "recover <条目id>"
+    },
+    {
+      "id": "fixate",
+      "desc": "固化知识条目（永久）",
+      "assert": "len(r['entries']['permanent']) > 0",
+      "hint": "fixate <条目id>"
+    },
+    {
+      "id": "crash",
+      "desc": "经历记忆崩溃",
+      "assert": "r['stats']['memory_crashes'] > 0",
+      "hint": "让完整度自然归零，或 dbg mem 0（正式试玩不建议）"
+    },
+    {
+      "id": "maintain",
+      "desc": "加固记忆",
+      "assert": "r['stats']['maintains'] > 0",
+      "hint": "maintain"
+    },
+    {
+      "id": "efficiency",
+      "desc": "获得单元效能提升（调度知识）",
+      "assert": "r['units']['efficiency'] > 1.0",
+      "hint": "recover/fixate db_unit_bus、db_unit_parallel 等"
+    },
+    {
+      "id": "chain_steel",
+      "desc": "走通钢铁链（焦炭/生铁/钢）",
+      "assert": "any(f['def'] in ('cokery', 'blast_furnace', 'steel_mill') for f in r['facilities'])",
+      "hint": "db_coking → db_blast_furnace → db_steel"
+    },
+    {
+      "id": "chem",
+      "desc": "走通化工链（硫酸/氨）",
+      "assert": "any(f['def'] in ('sulfuric_plant', 'ammonia_synth') for f in r['facilities'])",
+      "hint": "db_sulfuric / db_ammonia"
+    },
+    {
+      "id": "byproduct",
+      "desc": "副产物入库（焦炉煤气/煤焦油等）",
+      "assert": "r['resources'].get('coaltar', 0) > 0 or r['resources'].get('coalgas', 0) > 0",
+      "hint": "建焦炉即可"
+    },
+    {
+      "id": "renewable",
+      "desc": "使用可再生能源",
+      "assert": "any(f['def'] in ('csp_plant', 'solar_farm', 'wind_farm') for f in r['facilities'])",
+      "hint": "db_csp / db_pv / db_wind（可选科技）"
+    },
+    {
+      "id": "env_event",
+      "desc": "遭遇环境事件（非晴天）",
+      "assert": "bool(r.get('environment')) and r['environment'].get('event') not in (None, 'fair')",
+      "hint": "等天气自然变化，或 dbg env dust"
+    },
+    {
+      "id": "maintenance",
+      "desc": "启用维护体系并消耗维护件",
+      "assert": "r['maintenance'].get('enabled') and r['stats'].get('kits_used', 0) > 0",
+      "hint": "recover/fixate db_upkeep → build maintenance_depot"
+    },
+    {
+      "id": "mothball",
+      "desc": "封存设施（零维护消耗）",
+      "assert": "any(f['state'] == 'mothballed' for f in r['facilities'])",
+      "hint": "mothball <设施id> [on]"
+    },
+    {
+      "id": "db_build",
+      "desc": "建造数据库子系统",
+      "assert": "bool(r.get('database')) and r['database']['built'] >= 1",
+      "hint": "db → construct"
+    },
+    {
+      "id": "victory",
+      "desc": "通关：数据库竣工 + 烧录迁移",
+      "assert": "bool(r.get('database')) and r['database']['built'] >= r['database']['projects']",
+      "hint": "5 个子系统竣工后 migrate（需 13 条主线全固化）"
+    },
+    {
+      "id": "unit_factory",
+      "desc": "建造执行单元装配厂并造出单元",
+      "assert": "any(f['def'] == 'unit_factory' for f in r['facilities'])",
+      "hint": "recover/fixate db_units → build <空地> unit_factory"
+    },
+    {
+      "id": "demolish",
+      "desc": "拆除设施（返还一半材料）",
+      "assert": "r['stats'].get('play_seconds', 0) > 0 and True",
+      "hint": "demolish <设施id>"
+    },
+    {
+      "id": "backlog",
+      "desc": "经历副产物积压限产",
+      "assert": "any(f.get('backlog_over') for f in r['facilities'])",
+      "hint": "建焦炉后不管副产物 → 超阈值即限产"
+    },
+    {
+      "id": "backlog_fix",
+      "desc": "用转化/放空/回注解除积压",
+      "assert": "any(f['def'] in ('gas_shift', 'vent_tower', 'injection_well') for f in r['facilities'])",
+      "hint": "build gas_shift / vent_tower / injection_well"
+    }
+  ]
+}

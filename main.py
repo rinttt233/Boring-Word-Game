@@ -33,8 +33,10 @@ def load_json(name: str) -> dict:
         return json.load(f)
 
 
-def build_engine() -> Engine:
+def build_engine(seed=None) -> Engine:
+    """装配引擎。seed 非空时固定勘探/环境/故障随机（盲测可复现同一局）。"""
     engine = Engine()
+    engine.seed = seed          # 记在引擎上，report 会带出来（便于复盘）
     boot = load_json("bootstrap.json")
     # 初始库存
     for rid, amt in boot["resources"].items():
@@ -48,28 +50,34 @@ def build_engine() -> Engine:
     engine.registry.register("memory", MemorySystem(load_json("memory.json")))
     engine.registry.register("recovery",
                              RecoverySystem(load_json("recovery.json")["entries"]))
-    engine.registry.register("survey", SurveySystem(load_json("regions.json")))
+    engine.registry.register("survey",
+                             SurveySystem(load_json("regions.json"), seed=seed))
     engine.registry.register("claim", ClaimSystem())
     # heat_values + fuel_class：由 substances 表构建（burner 燃烧发电用）
     subs = load_json("substances.json")["substances"]
     heat = {s["id"]: s["heat_value"] for s in subs if s.get("heat_value")}
     fuel_cls = {s["id"]: s["fuel_class"] for s in subs
                 if s.get("fuel_class")}
+    ref_grades = {s["id"]: float(s["ref_grade"]) for s in subs
+                  if s.get("ref_grade")}
     maint = load_json("maintenance.json")
     engine.registry.register(
         "industry",
         IndustrySystem(load_json("facilities.json")["facilities"],
                        load_json("recipes.json")["recipes"],
                        heat_values=heat, fuel_classes=fuel_cls,
+                       ref_grades=ref_grades,
+                       backlog=load_json("backlog.json"),
                        mothball_restart_sec=float(
                            maint.get("mothball_restart_sec", 10.0))))
     # 设备维护（批次2b）：恢复 db_upkeep 后，设施开始持续消耗维护件
-    engine.registry.register("maintenance", MaintenanceSystem(maint))
+    engine.registry.register("maintenance", MaintenanceSystem(maint, seed=seed))
     engine.registry.register(
         "database",
         DatabaseSystem(load_json("database.json")["projects"]))
     engine.registry.register(
-        "environment", EnvironmentSystem(load_json("environment.json")))
+        "environment",
+        EnvironmentSystem(load_json("environment.json"), seed=seed))
     # 昼夜循环（太阳能/光伏发电依赖其日照系数；GUI 状态栏显示 ☀/☾）
     engine.registry.register(
         "daylight", DaylightSystem(load_json("daylight.json")))
@@ -105,13 +113,15 @@ def main() -> int:
                     help="无头演示：巡航 N 游戏秒后自动暂停并退出")
     ap.add_argument("--speed", type=float, default=1.0,
                     help="初始播放倍率")
+    ap.add_argument("--seed", type=int, default=None,
+                    help="固定随机种子（勘探/环境/设备故障），便于复现同一局")
     ap.add_argument("--gui", action="store_true",
                     help="启动 tkinter 黑白灰 GUI（默认纯终端）")
     ap.add_argument("--gui-selftest", action="store_true",
                     help="GUI 自检：建窗喂命令后自动销毁（无显示环境则跳过）")
     args = ap.parse_args()
 
-    engine = build_engine()
+    engine = build_engine(seed=args.seed)
     substances = load_json("substances.json")["substances"]
     sub_map = {s["id"]: s for s in substances}
 

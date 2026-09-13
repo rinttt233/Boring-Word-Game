@@ -6,6 +6,7 @@ import tkinter as tk
 from ui import theme as T
 from ui.commands import fmt_time
 from ui.panels.base import Panel, style_tree
+from core.world import fmt_grade
 
 
 class PlotsPanel(Panel):
@@ -56,6 +57,10 @@ class PlotsPanel(Panel):
         tsb = tk.Scrollbar(wrap, orient="vertical", command=self.tree.yview)
         tsb.pack(side="right", fill="y")
         self.tree.configure(yscrollcommand=tsb.set)
+        # 行内追加"地上建筑"后可能超宽 → 补横向滚动
+        hsb = tk.Scrollbar(wrap, orient="horizontal", command=self.tree.xview)
+        hsb.pack(side="bottom", fill="x")
+        self.tree.configure(xscrollcommand=hsb.set)
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
         # 双击地块 → 若为矿脉/残骸，打开百科该物质词条
         self.tree.bind("<Double-Button-1>", self._on_double)
@@ -127,8 +132,15 @@ class PlotsPanel(Panel):
             groups[p.ring][p.kind].append(p)
         return groups
 
-    def _row_text(self, p) -> str:
-        """地块行内摘要：id + 状态 + 物质/估值（一眼可辨，减少点击）。"""
+    def _facility_map(self):
+        """地块 id → 其上的设施（用于行内显示"谁建在这儿"）。"""
+        ind = self.engine.registry.get("industry")
+        if ind is None:
+            return {}
+        return {f.plot_id: f for f in ind.facilities.values()}
+
+    def _row_text(self, p, fac=None) -> str:
+        """地块行内摘要：id + 状态 + 物质/估值 + 地上建筑（一眼可辨，减少点击）。"""
         state_names = {"known": "勘察", "claimed": "占领",
                        "developed": "开发", "depleted": "枯竭"}
         parts = [f"{p.id}",
@@ -137,11 +149,16 @@ class PlotsPanel(Panel):
             name = self.router.rname(p.substance)
             if p.kind in ("ore", "wreck"):
                 if p.surveyed and p.known_grade is not None:
-                    parts.append(f"{name}~{p.known_grade:g}%")
+                    parts.append(f"{name}~{fmt_grade(p.known_grade)}%")
                 else:
                     parts.append(name)
             else:
                 parts.append(name)
+        # 地上建筑：便于"哪些地块已建/空着"的一眼扫描
+        if fac is not None:
+            parts.append(f"[{fac.id} {fac.name}]")
+        else:
+            parts.append("· 空")
         return " ".join(parts)
 
     def _rebuild_tree(self, preserve_open: bool = True) -> None:
@@ -154,6 +171,7 @@ class PlotsPanel(Panel):
         self._tree_rows = {}
         self._open_by_key = {}
         groups = self._build_tree_lines()
+        fac_map = self._facility_map()
         kind_names = {"empty": "空地", "water": "水源", "ore": "矿脉",
                       "wreck": "残骸"}
         new = self._new_plots
@@ -178,7 +196,8 @@ class PlotsPanel(Panel):
                     pid = p.id
                     tag = "new" if pid in new else "plot"
                     iid = self.tree.insert(
-                        kind_id, "end", text=self._row_text(p),
+                        kind_id, "end",
+                        text=self._row_text(p, fac_map.get(pid)),
                         tags=(tag,), values=(pid,))
                     self._tree_rows[iid] = (kind, pid)
         # 应用渐变闪烁
@@ -214,17 +233,24 @@ class PlotsPanel(Panel):
         self._render_actions()
 
     def _on_double(self, _evt=None):
-        """双击地块 → 打开百科该物质词条（矿脉/残骸/水源）。"""
+        """双击地块 → 有建筑则跳到建筑栏并选中；无建筑则打开物质百科词条。"""
         sel = self.tree.selection()
         if not sel:
             return
         meta = self._tree_rows.get(sel[0])
-        cb = getattr(self, "open_wiki", None)
-        if meta is None or cb is None:
+        if meta is None:
             return
         _kind, pid = meta
+        fac = self._facility_map().get(pid)
+        jump = getattr(self, "locate_building", None)
+        if fac is not None and jump is not None:
+            jump(fac.id)
+            return
+        cb = getattr(self, "open_wiki", None)
         p = self.engine.world.get(pid)
-        if p is None or not p.substance:
+        if p is None or not p.substance or cb is None:
+            if hasattr(self.engine, "log"):
+                self.engine.log(f"[地块] {pid} 上没有建筑，也没有可查的物质词条。")
             return
         cb(f"sub:{p.substance}")
 
@@ -294,7 +320,7 @@ class PlotsPanel(Panel):
                 r = p.known_reserve if p.surveyed and p.known_reserve is not None else None
                 text = ""
                 if g is not None:
-                    text = f"~{g:g}% (±{p.grade_err * 100:.0f}%) "
+                    text = f"~{fmt_grade(g)}% (±{p.grade_err * 100:.0f}%) "
                 if r is not None:
                     text += f"储量~{r:,.0f}{self.router.runit(p.substance)}"
                 if not text:
@@ -303,7 +329,7 @@ class PlotsPanel(Panel):
                              + (" (估值)" if p.surveyed else ""))
             else:
                 lines.append(f"{self.router.rname(p.substance)}: "
-                             f"品位 {p.grade:g}% | "
+                             f"品位 {fmt_grade(p.grade)}% | "
                              f"储量 {p.reserve:g}{self.router.runit(p.substance)}")
         lines.append(f"物流惩罚 ×{p.logistics_multiplier():g}")
         ind = engine.registry.get("industry")
@@ -531,8 +557,13 @@ class PlotsPanel(Panel):
         # 检测新勘探地块：新出现在 visible_plots 里的标记为新，记录发现时间
         visible_ids = {p.id for p in engine.world.visible_plots()}
         # 地块集合/状态摘要：只有真正变化时才重建树（避免频繁重建导致折叠被重置）
+        # 签名纳入"地上建筑 id"，使建成/拆除设施后行内能及时更新
+        ind = engine.registry.get("industry")
+        fac_on = ({f.plot_id: f.id for f in ind.facilities.values()}
+                  if ind is not None else {})
         state_sig = tuple(sorted(
-            (p.id, p.state, p.kind, p.ring) for p in engine.world.visible_plots()))
+            (p.id, p.state, p.kind, p.ring, fac_on.get(p.id, ""))
+            for p in engine.world.visible_plots()))
         old_sig = getattr(self, "_refresh_sig_prev", None)
 
         known_old = set(getattr(self, "_known_plot_ids", set()))

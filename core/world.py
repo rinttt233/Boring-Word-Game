@@ -9,6 +9,16 @@
 from typing import Dict, List, Optional
 
 
+def fmt_grade(v: Optional[float]) -> str:
+    """品位显示：≥10 取整（58）、<10 保留 1 位（铜 1.5）。
+
+    避免把勘探估值打成 83.9121% 这类长尾数字（试玩时发现的显示瑕疵）。
+    """
+    if v is None:
+        return "?"
+    return f"{v:.0f}" if abs(v) >= 10 else f"{v:.1f}"
+
+
 class Plot:
     KIND_EMPTY = "empty"
     KIND_ORE = "ore"
@@ -66,7 +76,7 @@ class Plot:
             return "未知"
         g = self.known_grade
         r = self.known_reserve
-        return f"~{g:g}%(±{self.grade_err * 100:.0f}%) ~{r:,.0f}t"
+        return f"~{fmt_grade(g)}%(±{self.grade_err * 100:.0f}%) ~{r:,.0f}t"
 
     def describe(self) -> str:
         """生成供日志/界面展示的地块描述（用估值）。"""

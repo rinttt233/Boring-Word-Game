@@ -9,6 +9,13 @@ ConsoleUI 设 running=False，GuiUI 销毁窗口）；未注入时仅记日志�
 """
 from typing import Callable, Optional
 
+import json
+import os
+import re
+import time
+
+from core.world import fmt_grade
+
 VALID_SPEEDS = (0.25, 0.5, 1.0, 2.0, 4.0, 8.0)
 
 
@@ -30,6 +37,87 @@ def fmt_amt(v: float) -> str:
     return f"{v:,.2f}".rstrip("0").rstrip(".")
 
 
+# ================= 存档槽（控制台 / GUI 共用）=================
+SAVE_NAME_RE = re.compile(r"[A-Za-z0-9_\-]+")
+
+
+def project_root() -> str:
+    """项目根目录（存档一律放这里，避免从别处启动时读写到别处的 saves/）。"""
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def saves_dir() -> str:
+    return os.path.join(project_root(), "saves")
+
+
+def slot_path(name: str) -> str:
+    return os.path.join(saves_dir(), name + ".json")
+
+
+def slot_summary(path: str) -> dict:
+    """读取存档头部信息，供存档槽列表展示（失败时只给文件信息）。"""
+    info = {"ok": False, "time": None, "facilities": None, "db": None,
+            "fixated": None, "units": None}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return info
+    try:
+        clock = data.get("clock", {}) or {}
+        info["time"] = float(clock.get("time", 0.0))
+        systems = data.get("systems", {}) or {}
+        facs = (systems.get("industry", {}) or {}).get("facilities", [])
+        info["facilities"] = len(facs)
+        info["units"] = len((data.get("units", {}) or {}).get("units", []))
+        status = (systems.get("recovery", {}) or {}).get("status", {}) or {}
+        info["fixated"] = sum(1 for v in status.values() if v == "permanent")
+        built = (systems.get("database", {}) or {}).get("built", [])
+        projects = (systems.get("database", {}) or {}).get("projects", [])
+        info["db"] = (len(built), len(projects) if projects else 5)
+        info["ok"] = True
+    except Exception:
+        pass
+    return info
+
+
+def list_slots() -> list:
+    """列出 saves/*.json 槽位（按修改时间倒序）。"""
+    d = saves_dir()
+    if not os.path.isdir(d):
+        return []
+    out = []
+    for fn in os.listdir(d):
+        if not fn.endswith(".json") or fn == "gui_prefs.json":
+            continue
+        p = os.path.join(d, fn)
+        if not os.path.isfile(p):
+            continue
+        try:
+            mt = os.path.getmtime(p)
+            size = os.path.getsize(p)
+        except OSError:
+            continue
+        out.append({"name": fn[:-5], "path": p, "mtime": mt, "size": size,
+                    **slot_summary(p)})
+    out.sort(key=lambda r: -r["mtime"])
+    return out
+
+
+def slot_line(r: dict, rname=None) -> str:
+    """槽位单行文本（等宽字体下列对齐）。"""
+    tag = "自动" if r["name"] in ("autosave", "auto") else "    "
+    if r.get("ok") and r.get("time") is not None:
+        t = fmt_time(r["time"])
+        db = r.get("db") or (0, 5)
+        body = (f"t={t:<8} 设施{r['facilities']:>3} 单元{r['units']:>3} "
+                f"DB {db[0]}/{db[1]} 固化{r['fixated']:>2}")
+    else:
+        body = "（无法解析的存档文件）"
+    mt = time.strftime("%m-%d %H:%M", time.localtime(r["mtime"]))
+    return f"{tag} {r['name']:<16} {body}  {mt}"
+
+
 class CommandRouter:
     def __init__(self, engine, substance_map,
                  on_quit: Optional[Callable[[], None]] = None) -> None:
@@ -37,6 +125,8 @@ class CommandRouter:
         self.subs = substance_map
         self.speed = 1.0
         self.on_quit = on_quit
+        self.exec_count = 0          # 已执行的命令数（report 用，便于复盘）
+        self._emergency_used = False
 
     # ================= 名称工具（供命令与界面复用）=================
     def rname(self, rid: str) -> str:
@@ -58,6 +148,7 @@ class CommandRouter:
         if handler is None:
             self.engine.log(f"[未知指令] '{cmd}' — 输入 help 查看命令。")
             return
+        self.exec_count += 1
         try:
             handler(args)
         except (ValueError, IndexError) as e:
@@ -76,7 +167,8 @@ class CommandRouter:
         )
         self.engine.log(
             "工业: assign <设施> | unassign <设施> | units | resources "
-            "| undo (撤销上次建造) | mothball <设施> [on|off] | status"
+            "| undo (撤销上次建造) | demolish <设施> (拆除返一半) "
+            "| mothball <设施> [on|off] | status"
         )
         self.engine.log(
             "生存: maintain (记忆加固，防失忆) | memory | entries | "
@@ -96,12 +188,20 @@ class CommandRouter:
             "百科: wiki (列分类) | wiki <关键词> 搜索 | wiki #<id> 查看词条"
         )
         self.engine.log(
+            "AI/盲测: guide (试玩向导) | report (JSON 状态) | suggest (下一步建议) "
+            "| cover (覆盖清单)"
+        )
+        self.engine.log(
+            "副产物: policy backlog throttle|ignore (超限限产开关) | "
+            "convert(水煤气变换)/vent(放空塔)/sink(回注井) 三选一给副产物找出路"
+        )
+        self.engine.log(
             "调试: dbg res <资源> <量> | dbg mem <0-100> | dbg add <资源> <量>"
             " | dbg unit <n> | dbg unlock <条目|all> | dbg time <秒> |"
             " dbg env <事件> | dbg degrade off | dbg instant [on|off]"
         )
         self.engine.log(
-            "快捷键: 空格=暂停/继续 | 任意键可随时打断时间流动输入指令"
+            "快捷键: 空格=暂停/继续 | F9=存档 / F10=读档 | 任意键可随时打断时间流动输入指令"
         )
 
     def _cmd_facilities_help(self, args):
@@ -151,6 +251,45 @@ class CommandRouter:
         maint = self.engine.registry.get("maintenance")
         if maint is not None:
             self.engine.log("[维护] " + maint.status_text(self.engine))
+
+    def _cmd_policy(self, args):
+        """policy [backlog throttle|ignore] —— 副产物积压政策（批次3）。
+
+        throttle（默认）：超限副产物会让产出它的设施限产；
+        ignore：完全关闭限产（纯沙盒/调试）。
+        """
+        ind = self.engine.registry.get("industry")
+        if ind is None:
+            self.engine.log("无工业模块")
+            return
+        if not args:
+            self.engine.log(f"[政策] 副产物积压 = {ind.backlog_policy}"
+                            "（可选 throttle / ignore）")
+            st = ind.backlog_status(self.engine)
+            over = [f"{k} {v['stock']:g}/{v['limit']:g}"
+                    for k, v in st.items() if v["over"]]
+            self.engine.log("[政策] 当前限产：" + ("；".join(over) if over
+                                                   else "无超限副产物"))
+            return
+        if args[0].lower() != "backlog" or len(args) < 2:
+            self.engine.log("用法: policy backlog throttle|ignore")
+            return
+        val = args[1].lower()
+        if val not in ("throttle", "ignore"):
+            self.engine.log("可选值: throttle（超限限产）/ ignore（关闭）")
+            return
+        ind.backlog_policy = val
+        self.engine.log(f"[政策] 副产物积压政策已设为 {val}。")
+
+    def _cmd_demolish(self, args):
+        """demolish <设施id> —— 拆除设施，返还 50% 材料，地块可重新规划。"""
+        ind = self.engine.registry.get("industry")
+        if ind is None or not args:
+            self.engine.log("用法: demolish <设施id>（返还包括建造成本的一半）")
+            return
+        err = ind.demolish(self.engine, args[0], refund=0.5)
+        if err:
+            self.engine.log(f"[工业] {err}")
 
     def _cmd_mothball(self, args):
         """mothball <设施ID> [on|off] —— 封存/解除封存（零维护消耗）。"""
@@ -423,17 +562,25 @@ class CommandRouter:
         if db.is_complete():
             self.engine.log("[终局] 可靠数据库已建成，劣化终止。")
             return
+        # CRASH-1 修复：全部竣工但尚未迁移时 next_project() 为 None
+        nxt = db.next_project()
+        nxt_id = nxt["id"] if nxt else None
         for p in db.projects:
             st = "√竣工" if p["id"] in db.built else "·未建"
-            if p["id"] == db.next_project()["id"] and p["id"] not in db.built:
+            if nxt_id is not None and p["id"] == nxt_id \
+                    and p["id"] not in db.built:
                 st = "▶当前"
             cost = " ".join(f"{k}:{v:g}" for k, v in p.get("cost", {}).items())
             preq = f" | 电网≥{p.get('power_req', 0):g}kWh" \
                 if p.get("power_req") else ""
             self.engine.log(f"  {p['id']} {p['name']} [{st}] | "
                             f"需 {cost}{preq} | {p.get('desc', '')}")
-        self.engine.log(f"[终局] {db.progress_text()}"
-                        " | 指令: construct 建造当前项 | migrate 烧录迁移")
+        if nxt_id is None:
+            self.engine.log(f"[终局] {db.progress_text()} —— 全部子系统已竣工，"
+                            "可执行 migrate 烧录迁移（需主线知识全部固化）。")
+        else:
+            self.engine.log(f"[终局] {db.progress_text()}"
+                            " | 指令: construct 建造当前项 | migrate 烧录迁移")
 
     def _cmd_construct(self, args):
         db = self.engine.registry.get("database")
@@ -461,7 +608,7 @@ class CommandRouter:
         for p in rows:
             extra = ""
             if p.substance:
-                extra = f" | {self.rname(p.substance)} 品位{p.grade:g}% " \
+                extra = f" | {self.rname(p.substance)} 品位{fmt_grade(p.grade)}% " \
                         f"储量{p.reserve:g}{self.runit(p.substance)}"
             fac = ""
             if ind:
@@ -489,30 +636,115 @@ class CommandRouter:
         for line in self.engine.log_lines[-n:]:
             self.engine.log("  " + line)
 
+    # ---- agent / 盲测接口（只读，见 ui/agent_api.py 与 AGENTS.md）----
+    def _cmd_report(self, args):
+        """report [to <文件>] —— 机器可读状态（JSON）。"""
+        from ui import agent_api
+        rep = agent_api.build_report(self.engine, self)
+        if args and args[0].lower() == "to" and len(args) >= 2:
+            path = args[1]
+            if not os.path.isabs(path):
+                path = os.path.join(project_root(), path)
+            os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(rep, f, ensure_ascii=False, indent=1)
+            self.engine.log(f"[报告] 已写入 {os.path.relpath(path, project_root())}"
+                            f"（report_version={rep['report_version']}）")
+            return
+        # 控制台直接输出紧凑 JSON（GUI 下也可复制）
+        self.engine.log(json.dumps(rep, ensure_ascii=False))
+
+    def _cmd_suggest(self, args):
+        """suggest —— 现在最该做的几件事（建议+理由+阻塞）。"""
+        from ui import agent_api
+        items = agent_api.suggest_actions(self.engine, self)
+        if not items:
+            self.engine.log("[建议] 暂时没有可执行的建议 —— 试试 @tick 推进时间。")
+            return
+        self.engine.log("[建议] 按优先级：")
+        for i, s in enumerate(items, 1):
+            cmd = s["cmd"] or "（无法执行）"
+            line = f"  {i}) {cmd}　← {s['why']}"
+            if s.get("blocked"):
+                line += f"　[阻塞：{s['blocked']}]"
+            self.engine.log(line)
+
+    def _cmd_cover(self, args):
+        """cover —— 内容覆盖清单进度（盲测目标函数）。"""
+        from ui import agent_api
+        tr = getattr(self, "_coverage", None)
+        if tr is None:
+            tr = agent_api.CoverageTracker()
+            self._coverage = tr
+        tr.update(agent_api.build_report(self.engine, self))
+        p = tr.progress()
+        self.engine.log(f"[覆盖] {p['done']}/{p['total']} 项已体验")
+        for m in p["missing"]:
+            self.engine.log(f"  · 未覆盖：{m['desc']}（{m['id']}）"
+                            + (f"　提示：{m['hint']}" if m["hint"] else ""))
+
+    def _cmd_guide(self, args):
+        """guide [章节id] —— 打印试玩向导（与 AGENTS.md 同源）。"""
+        from ui import agent_api
+        text = agent_api.guide_text(args[0] if args else "")
+        for line in text.splitlines():
+            self.engine.log(line)
+
     def _cmd_save(self, args):
-        import json
-        import os
-        import re
-        name = args[0] if args else "auto"
-        if not re.fullmatch(r"[A-Za-z0-9_\-]+", name):
+        name = args[0] if args else None
+        if name is None:
+            # GUI：打开存档槽选择窗口（控制台下退回默认档名）
+            hook = getattr(self, "save_slot_hook", None)
+            if hook is not None:
+                hook()
+                return
+            name = "auto"
+        if not SAVE_NAME_RE.fullmatch(name):
             raise ValueError("存档名仅允许字母/数字/_-")
-        os.makedirs("saves", exist_ok=True)
-        path = os.path.join("saves", name + ".json")
+        os.makedirs(saves_dir(), exist_ok=True)
+        path = slot_path(name)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(self.engine.to_dict(), f, ensure_ascii=False, indent=1)
-        self.engine.log(f"[存档] 已写入 {path}")
+        self.engine.log(f"[存档] 已写入 {os.path.relpath(path, project_root())}")
 
     def _cmd_load(self, args):
-        import json
-        import os
         if not args:
+            hook = getattr(self, "load_slot_hook", None)
+            if hook is not None:
+                hook()
+                return
             raise ValueError("用法: load <存档名>")
-        path = os.path.join("saves", args[0] + ".json")
+        path = slot_path(args[0])
         if not os.path.exists(path):
-            raise ValueError(f"存档不存在: {path}")
+            raise ValueError(f"存档不存在: {os.path.relpath(path, project_root())}")
         with open(path, "r", encoding="utf-8") as f:
             self.engine.from_dict(json.load(f))
         self.engine.log(f"[读档] {args[0]} 已载入，时间 {fmt_time(self.engine.clock.time)}")
+        self._post_load_check()
+
+    def _post_load_check(self):
+        """读档后自检（READLOCK-1）：落到"无燃料+无电+采矿需电"死锁时，
+        给明确诊断并提供**一次性应急启动**，避免"读档即绝望"。"""
+        ind = self.engine.registry.get("industry")
+        if ind is None or not hasattr(ind, "power_deadlock"):
+            return
+        why = ind.power_deadlock(self.engine)
+        if why is None:
+            return
+        self.engine.log(f"[读档自检] 检测到能源死锁：{why}。", level="danger",
+                        category="power")
+        if self._emergency_used:
+            self.engine.log("[读档自检] 应急启动本局已用过一次，不再重复发放。"
+                            "建议：load 一个更早的存档，或手动 dbg 处理。",
+                            level="warn")
+            return
+        self._emergency_used = True
+        self.engine.economy.add("coal", 30.0)
+        from core.stats import bump as _bump
+        _bump(self.engine, "emergency_starts")
+        self.engine.log("[读档自检] 已发放应急启动煤 30t（一次性，已记入统计）。"
+                        "请立刻用它把采煤链接回电网：给电站 fuel 设煤 → "
+                        "给煤矿派单元 → 让电力储备回升。", level="warn")
 
     def _cmd_quit(self, args):
         self._request_quit()
@@ -540,9 +772,17 @@ class CommandRouter:
             return
         key = args[0]
         if key.startswith("#"):
-            e = wiki.get(key[1:])
+            eid = key[1:]
+            e = wiki.get(eid)
             if e is None:
-                self.engine.log(f"[百科] 未找到词条 {key[1:]}")
+                # 容错：允许直接写游戏内条目 id（db_coking / coal / cokery …）
+                for prefix in ("db:", "sub:", "fac:", "rec:"):
+                    e = wiki.get(prefix + eid)
+                    if e is not None:
+                        break
+            if e is None:
+                self.engine.log(f"[百科] 未找到词条 {eid}"
+                                "（可先 wiki <关键词> 搜索，或写全 id 如 #db:db_coking）")
                 return
             self.engine.log(f"【{e['title']}】({e['category']})")
             for line in e["body"].splitlines():

@@ -356,13 +356,27 @@ class ProcessesPanel(_RightPanel):
                 + (f" | 发电 {power_only} 座" if power_only else "")
                 + (f" | 停摆 {len(stalled)} 座" if stalled else "")]
         rows.append("物质        产/s    耗/s    净/s")
+        backlog = (ind.backlog_status(engine)
+                   if hasattr(ind, "backlog_status") else {})
         for k in keys:
             m = made.get(k, 0.0)
             u = used.get(k, 0.0)
             net = m - u
             flag = "缺" if net < -1e-9 else ("余" if net > 1e-9 else "")
+            info = backlog.get(k)
+            if info and info["over"]:
+                flag = (flag + " " if flag else "") + \
+                    f"!积压{info['stock']:g}/{info['limit']:g}"
             rows.append(f"{router.rname(k):<8} {m:>6.2f} {u:>6.2f} "
                         f"{net:>+7.2f} {flag}")
+        over = [f"{router.rname(k)} {v['stock']:g}/{v['limit']:g}"
+                for k, v in backlog.items() if v["over"]]
+        if over:
+            pol = getattr(ind, "backlog_policy", "throttle")
+            rows.append("")
+            rows.append(f"副产物积压（政策 {pol}）：" + "；".join(over))
+            rows.append("出路：水煤气变换(转化) / 放空塔(烧掉) / 回注井(堆存)"
+                        " / policy backlog ignore(关闭限产)")
         if stalled:
             rows.append("")
             rows.append("停摆: " + " ".join(stalled[:8]))

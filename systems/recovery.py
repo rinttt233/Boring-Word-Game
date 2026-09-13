@@ -20,6 +20,9 @@ class RecoverySystem:
         # status: locked / active / permanent
         self.status: Dict[str, str] = {eid: "locked" for eid in self.entries}
         self.active_until: Dict[str, float] = {}
+        # 主线固化进度奖励（P1 ②b2）：每 2 条主线 +1 单元，上限 6
+        self.unit_bonus_cap = 6
+        self._unit_bonus_granted = 0
 
     def start(self, engine: object) -> None:
         self._engine = engine
@@ -58,19 +61,34 @@ class RecoverySystem:
         return float(getattr(engine.units, "efficiency", 1.0) or 1.0)
 
     def _sync_efficiency(self) -> None:
-        """把知识加成同步到 UnitPool（状态变化时调用，不必每 tick 计算）。"""
+        """把知识加成同步到 UnitPool，并按主线固化进度发放单元奖励。
+
+        - 单元效能 = 1.0 + Σ grants.unit_efficiency（临时条目也生效）
+        - **P1 ②b2**：每永久固化 2 条主线条目 → +1 执行单元（上限 +6）。
+          知识不只是产能，也是"能同时干更多事"的能力。
+        """
         eng = getattr(self, "_engine", None)
         if eng is None:
             return
         target = self.unit_efficiency()
         old = float(getattr(eng.units, "efficiency", 1.0) or 1.0)
-        if abs(old - target) < 1e-9:
-            return
-        eng.units.set_efficiency(target)
-        arrow = "提升" if target > old else "下降"
-        eng.log(f"[单元] 调度知识{arrow}：单元效能 ×{old:.2f} → ×{target:.2f}"
-                f"（产能与作业速度随之{'提高' if target > old else '回落'}）。",
-                level="normal" if target > old else "warn", category="unit")
+        if abs(old - target) >= 1e-9:
+            eng.units.set_efficiency(target)
+            arrow = "提升" if target > old else "下降"
+            eng.log(f"[单元] 调度知识{arrow}：单元效能 ×{old:.2f} → ×{target:.2f}"
+                    f"（产能与作业速度随之{'提高' if target > old else '回落'}）。",
+                    level="normal" if target > old else "warn", category="unit")
+        n_main = sum(1 for eid, st in self.status.items()
+                     if st == "permanent"
+                     and not self.entries.get(eid, {}).get("optional"))
+        want = min(int(getattr(self, "unit_bonus_cap", 6)), n_main // 2)
+        while self._unit_bonus_granted < want:
+            self._unit_bonus_granted += 1
+            u = eng.units.add_unit("执行器-知识")
+            stat_bump(eng, "units_bonus", 1.0)
+            eng.log(f"[单元] 主线知识固化奖励：新增执行单元 {u.id}"
+                    f"（已奖励 {self._unit_bonus_granted}/{want}，"
+                    f"共 {eng.units.count()} 个单元）。", recover="unit")
 
     # ---- 指令 -------------------------------------------------------
     def recover(self, engine: object, entry_id: str) -> Optional[str]:
@@ -188,6 +206,7 @@ class RecoverySystem:
     # ---- 存档 -------------------------------------------------------
     def to_dict(self) -> dict:
         return {"status": dict(self.status),
+                "unit_bonus_granted": self._unit_bonus_granted,
                 "active_until": {k: v for k, v in self.active_until.items()}}
 
     def load(self, data: dict) -> None:
@@ -196,4 +215,5 @@ class RecoverySystem:
             self.status.setdefault(eid, "locked")
         self.active_until = {
             k: float(v) for k, v in data.get("active_until", {}).items()}
+        self._unit_bonus_granted = int(data.get("unit_bonus_granted", 0) or 0)
         self._sync_efficiency()

@@ -17,7 +17,13 @@ class DatabaseSystem:
     def __init__(self, projects: List[dict]) -> None:
         self.projects: List[dict] = projects
         self.built: List[str] = []        # 已竣工子系统 id（有序）
-        self.complete: bool = False
+        self.complete: bool = False       # 烧录迁移已完成（劣化终止）
+        self.migrated: bool = False       # 与 complete 同义，供机器可读字段使用
+
+    # ---- 状态 -------------------------------------------------------
+    def can_migrate(self) -> bool:
+        """是否已具备迁移条件（子系统建完；条目是否固化由 _try_migrate 检查）。"""
+        return len(self.built) >= len(self.projects)
 
     def start(self, engine: object) -> None:
         self._engine = engine
@@ -111,6 +117,7 @@ class DatabaseSystem:
                 "无法完整迁移: " + names + "。请 fixate 后重试 migrate。")
             return
         self.complete = True
+        self.migrated = True
         self._engine.log(
             "[数据库工程] 烧录迁移完成 —— 主体知识已迁入可靠数据库。")
         self._engine.bus.emit("database_complete", {})
@@ -126,8 +133,11 @@ class DatabaseSystem:
 
     # ---- 存档 -------------------------------------------------------
     def to_dict(self) -> dict:
-        return {"built": list(self.built), "complete": self.complete}
+        return {"built": list(self.built), "complete": self.complete,
+                "migrated": bool(self.migrated or self.complete)}
 
     def load(self, data: dict) -> None:
         self.built = list(data.get("built", []))
         self.complete = bool(data.get("complete", False))
+        # 旧档没有 migrated 字段 → 用 complete 兜底（两者语义相同）
+        self.migrated = bool(data.get("migrated", self.complete))

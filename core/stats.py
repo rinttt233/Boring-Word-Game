@@ -18,6 +18,9 @@ class Stats:
         "efficiency_peak": 1.0,   # 单元效能峰值
         "breakdowns": 0.0,        # 设备故障停机次数（维护失效）
         "kits_used": 0.0,         # 累计消耗维护件
+        "emergency_starts": 0.0,  # 读档死锁时发放应急启动的次数
+        "units_built": 0.0,       # 装配厂产出的执行单元数
+        "units_bonus": 0.0,       # 主线固化奖励的执行单元数
         "play_seconds": 0.0,      # 游戏内累计运行时间
     }
 

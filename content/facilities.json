@@ -723,6 +723,89 @@
    "requires_recovery": "db_upkeep",
    "desc": "制造维护件的车间。恢复「设备维护」知识后，所有设施都开始消耗维护件。",
    "build_time": 16
+  },
+  {
+   "id": "unit_factory",
+   "name": "执行单元装配厂",
+   "allowed_plot_kinds": [
+    "empty"
+   ],
+   "build_cost": {
+    "scrap_alloy": 30.0,
+    "steel": 15.0,
+    "copper": 8.0
+   },
+   "recipe": "assemble_unit",
+   "kind": "unit_factory",
+   "unit_rate": 0.005,
+   "slots": 1,
+   "requires_recovery": "db_units",
+   "desc": "装配执行单元本体：约 200 秒 1 个（受单元效能加速），每个耗 16 钢 + 10 铜。把「单元数量」从固定资源变成可投资产能。",
+   "build_time": 22
+  },
+  {
+   "id": "gas_shift",
+   "name": "水煤气变换炉",
+   "allowed_plot_kinds": [
+    "empty"
+   ],
+   "build_cost": {
+    "scrap_alloy": 20.0,
+    "steel": 10.0
+   },
+   "recipe": "shift_gas",
+   "slots": 1,
+   "requires_recovery": "db_steel",
+   "desc": "应对手段①转化：把积压的焦炉煤气变成氢。",
+   "build_time": 16
+  },
+  {
+   "id": "vent_tower",
+   "name": "放空塔",
+   "allowed_plot_kinds": [
+    "empty"
+   ],
+   "build_cost": {
+    "scrap_alloy": 25.0
+   },
+   "kind": "vent",
+   "vent_substances": [
+    "coalgas",
+    "bfgas",
+    "crack_gas",
+    "coaltar"
+   ],
+   "vent_rate": 1.5,
+   "power_use": 0.2,
+   "slots": 1,
+   "requires_recovery": "db_coking",
+   "desc": "应对手段②放空/焚烧：把多余气液直接烧掉（材料浪费，但立刻解除限产）。",
+   "build_time": 12
+  },
+  {
+   "id": "injection_well",
+   "name": "回注井",
+   "allowed_plot_kinds": [
+    "empty"
+   ],
+   "build_cost": {
+    "scrap_alloy": 15.0,
+    "steel": 5.0
+   },
+   "kind": "sink",
+   "sink_substances": [
+    "coaltar",
+    "bfgas",
+    "crack_gas",
+    "coalgas"
+   ],
+   "sink_rate": 2.0,
+   "capacity": 2000.0,
+   "power_use": 0.3,
+   "slots": 1,
+   "requires_recovery": "db_coking",
+   "desc": "应对手段③回注/堆存：把副产物压进地下（容量 2000，装满即停）——不浪费但占空间，装满要继续建。",
+   "build_time": 14
   }
  ]
 }

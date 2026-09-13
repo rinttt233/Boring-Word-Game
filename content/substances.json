@@ -6,7 +6,8 @@
    "name": "铁矿石",
    "category": "矿物",
    "unit": "t",
-   "desc": "地表赤铁矿露头。炼铁原料，品位与脉量决定价值。"
+   "desc": "地表赤铁矿露头。炼铁原料，品位与脉量决定价值。",
+   "ref_grade": 51.0
   },
   {
    "id": "coal",
@@ -15,21 +16,24 @@
    "unit": "t",
    "desc": "能源与焦炭原料。燃烧/干馏的核心输入。",
    "heat_value": 24.0,
-   "fuel_class": "solid"
+   "fuel_class": "solid",
+   "ref_grade": 78.0
   },
   {
    "id": "limestone",
    "name": "石灰石",
    "category": "矿物",
    "unit": "t",
-   "desc": "高炉造渣剂/炼铁必需助熔剂，也是建材。"
+   "desc": "高炉造渣剂/炼铁必需助熔剂，也是建材。",
+   "ref_grade": 92.0
   },
   {
    "id": "copper_ore",
    "name": "铜矿石",
    "category": "矿物",
    "unit": "t",
-   "desc": "低品位铜矿。电解/导线等电气化原料。"
+   "desc": "低品位铜矿。电解/导线等电气化原料。",
+   "ref_grade": 2.1
   },
   {
    "id": "sulfur",
@@ -38,7 +42,8 @@
    "unit": "t",
    "desc": "接触法硫酸的原料，深圈层矿藏。",
    "heat_value": 9.0,
-   "fuel_class": "solid"
+   "fuel_class": "solid",
+   "ref_grade": 92.0
   },
   {
    "id": "water",
@@ -89,14 +94,16 @@
    "name": "残骸合金",
    "category": "回收",
    "unit": "t",
-   "desc": "坠毁船体可回收的轻合金，ASI 初级结构材料。"
+   "desc": "坠毁船体可回收的轻合金，ASI 初级结构材料。",
+   "ref_grade": 62.0
   },
   {
    "id": "salt",
    "name": "盐",
    "category": "矿物",
    "unit": "t",
-   "desc": "蒸发岩/卤水。氯碱电解的原料。"
+   "desc": "蒸发岩/卤水。氯碱电解的原料。",
+   "ref_grade": 80.0
   },
   {
    "id": "petroleum",
@@ -105,7 +112,8 @@
    "unit": "t",
    "desc": "地下烃类矿藏。裂解产乙烯/汽油。",
    "heat_value": 42.0,
-   "fuel_class": "liquid"
+   "fuel_class": "liquid",
+   "ref_grade": 70.0
   },
   {
    "id": "caustic",
@@ -229,7 +237,8 @@
    "name": "铝土矿",
    "category": "矿物",
    "unit": "t",
-   "desc": "炼铝原料。"
+   "desc": "炼铝原料。",
+   "ref_grade": 58.0
   },
   {
    "id": "aluminum",
@@ -284,21 +293,24 @@
    "name": "镍矿石",
    "category": "矿物",
    "unit": "t",
-   "desc": "硫化镍矿/红土镍矿。工业镍主要来源，需选矿富集。"
+   "desc": "硫化镍矿/红土镍矿。工业镍主要来源，需选矿富集。",
+   "ref_grade": 2.2
   },
   {
    "id": "chrome_ore",
    "name": "铬矿石",
    "category": "矿物",
    "unit": "t",
-   "desc": "铬铁矿(FeCr2O4)。不锈钢与电镀的铬源。"
+   "desc": "铬铁矿(FeCr2O4)。不锈钢与电镀的铬源。",
+   "ref_grade": 32.0
   },
   {
    "id": "tungsten_ore",
    "name": "钨矿石",
    "category": "矿物",
    "unit": "t",
-   "desc": "黑钨矿(Fe,Mn)WO4。高熔点金属原料。"
+   "desc": "黑钨矿(Fe,Mn)WO4。高熔点金属原料。",
+   "ref_grade": 1.6
   },
   {
    "id": "nickel_concentrate",
@@ -361,7 +373,8 @@
    "name": "独居石",
    "category": "矿物",
    "unit": "t",
-   "desc": "稀土磷酸盐矿(含铈/镧/钕)。稀土工业的起点矿种。"
+   "desc": "稀土磷酸盐矿(含铈/镧/钕)。稀土工业的起点矿种。",
+   "ref_grade": 6.5
   },
   {
    "id": "rare_concentrate",
@@ -417,7 +430,8 @@
    "name": "石英砂",
    "category": "矿物",
    "unit": "t",
-   "desc": "SiO2 砂矿。教材：沙子的主要成分，电子工业的起点原料。"
+   "desc": "SiO2 砂矿。教材：沙子的主要成分，电子工业的起点原料。",
+   "ref_grade": 86.0
   },
   {
    "id": "silicon",

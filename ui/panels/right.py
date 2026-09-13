@@ -190,6 +190,17 @@ class RecoveryPanel(Refreshable, Panel):
         name = e["name"]
         if st == "permanent":
             return f"{name} [{mark}]"
+        if st == "active":
+            # BUG-5：临时条目显示倒计时；剩 30s 内加 ! 提醒
+            rec = self.engine.registry.get("recovery")
+            left = (rec.expires_in(self.engine, e["id"])
+                    if rec is not None and hasattr(rec, "expires_in") else None)
+            if left is not None:
+                tail = "!" if left <= 30 else ""
+                q = " 排队中" if (rec is not None
+                                  and hasattr(rec, "is_queued")
+                                  and rec.is_queued(e["id"])) else ""
+                return f"{name} [临时 {left:.0f}s{tail}]{q}"
         ok, missing = self._prereq_ok(self.engine.registry.get("recovery"), e)
         if not ok:
             return f"{name} {T.S_LOCK}需{','.join(missing)}"
@@ -275,8 +286,16 @@ class RecoveryPanel(Refreshable, Panel):
         rec = self.engine.registry.get("recovery")
         if rec is None:
             return ()
+        def _left(eid):
+            # 临时条目按 5 秒一档入签名 → 倒计时会刷新，但不会每帧重建列表
+            if rec.status.get(eid) != "active" or not hasattr(rec, "expires_in"):
+                return None
+            left = rec.expires_in(engine, eid)
+            return None if left is None else int(left // 5)
         return tuple(sorted(
-            (eid, rec.status.get(eid), self._cost_ok(rec.entries[eid]))
+            (eid, rec.status.get(eid), self._cost_ok(rec.entries[eid]),
+             _left(eid), (rec.is_queued(eid) if hasattr(rec, "is_queued")
+                          else False))
             for eid in rec.entries))
 
     def _do_rebuild(self):

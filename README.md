@@ -90,7 +90,7 @@ python -X utf8 tools/play_report.py           # 把 saves/ai_samples.csv 出成�
 ## 测试
 
 ```bash
-python -X utf8 -m unittest discover -s tests   # 单元测试（当前 193 例）
+python -X utf8 -m unittest discover -s tests   # 单元测试（当前 206 例）
 python -X utf8 main.py --gui-selftest           # GUI 自检
 python -X utf8 smoke_test.py                    # 集成冒烟
 python -X utf8 gameplay_test.py                 # M1 玩法闭环（真实 content，含真实施工耗时）

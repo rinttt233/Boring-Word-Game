@@ -209,6 +209,7 @@ tick 函数报告真实状态。
 | （插批）P1 + 批次3 | ✅ 完成 | ①品位接入产出（参考品位归一，clamp 0.25~2.0）②单元扩容（主线 db_units→装配厂 1 个/200s ＋ 每 2 条主线 +1 单元，上限 +6）③`demolish` 拆除返还 50% ＋ depleted 复用 ④记忆口径排除停摆 ＋ 系数补偿 0.002→0.003；**批次3**：副产物阈值限产 ＋ 4 种应对（转化/放空/回注/政策开关）。全量 181 例测试 OK，9 个端点脚本全 OK（victory 覆盖 14 条主线 ＋ 副产物处置 ＋ 装配厂） |
 | 4 电力优先级 + 储能 | ⏳ 待开工 | — |
 | （插批）盲测策略强化（C） | ✅ 完成 | `tools/ladder_policy.py`（目标驱动阶段机 + 资源账本 + 电力节流）+ `blind_test --policy ladder --assert-victory`：**只用文档化接口公平通关 20/20**（平均约 50 游戏分钟、覆盖 22.2/26）；`tests/test_ladder_policy.py`（12 例）；修 `cover` 的 `bool` 作用域 bug；把 4 条策略要点写回 `suggest` 与 `AGENTS.md`（规则 10→18 条）。**未改任何玩法数值** |
+| （插批）BUG-5 临时知识窗口 | ✅ 完成 | 窗口 90 → **180 游戏秒**（数据驱动 `recovery.json: temporary_ttl_default`）；`fixate` **自动排队**（FIFO、材料不预扣、排队不冻结窗口）；**已开工的烧录不中途丢失**；倒计时进 `entries`/GUI/`report.entries.active[].expires_in`、剩 30s warn、`suggest` 最优先；`tests/test_recovery_window.py`（13 例）。全量 206 例 OK、9 端点 OK、阶梯策略仍 20/20 |
 
 **下一步建议**：批次 3（副产物积压 + ≥4 种应对）→ 批次 4（电力优先级 + 储能）。
 （批次 3 已完成；盲测策略强化为插批，批次 4 仍是下一批主线机制。）

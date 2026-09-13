@@ -15,11 +15,18 @@ from core.stats import bump as stat_bump
 
 
 class RecoverySystem:
-    def __init__(self, entries: List[dict]) -> None:
+    def __init__(self, entries: List[dict],
+                 default_ttl: float = 180.0) -> None:
         self.entries: Dict[str, dict] = {e["id"]: e for e in entries}
         # status: locked / active / permanent
         self.status: Dict[str, str] = {eid: "locked" for eid in self.entries}
         self.active_until: Dict[str, float] = {}
+        # 临时窗口默认值（游戏秒；暂停不流逝）。条目自己的 temporary_ttl 优先。
+        self.default_ttl = float(default_ttl)
+        # fixate 排队（BUG-5）：没有空闲单元时不报错，而是入队等单元空出。
+        # 注意：**排队不冻结窗口** —— 临时窗口照常流逝，压力还在。
+        self.queued: List[str] = []
+        self._warned = set()             # 已发过「即将过期」告警的条目
         # 主线固化进度奖励（P1 ②b2）：每 2 条主线 +1 单元，上限 6
         self.unit_bonus_cap = 6
         self._unit_bonus_granted = 0
@@ -29,6 +36,39 @@ class RecoverySystem:
         engine.bus.on("job_done", self._on_job_done)
         engine.bus.on("memory_crash", self._on_memory_crash)
         self._sync_efficiency()
+
+    # ---- 临时窗口（BUG-5：显式倒计时，供 report/UI/suggest 共用）----
+    def ttl_of(self, entry_id: str) -> float:
+        return float(self.entries.get(entry_id, {}).get(
+            "temporary_ttl", self.default_ttl))
+
+    def expires_in(self, engine: object, entry_id: str):
+        """临时条目还剩多少游戏秒；非 active 返回 None。"""
+        if self.status.get(entry_id) != "active":
+            return None
+        until = self.active_until.get(entry_id)
+        if until is None:
+            return None
+        return max(0.0, float(until) - float(engine.clock.time))
+
+    def is_queued(self, entry_id: str) -> bool:
+        return entry_id in self.queued
+
+    def _fixate_running(self, engine: object, entry_id: str) -> bool:
+        """该条目是否已有正在进行的 fixate 作业（已开工的烧录不会中途丢失）。"""
+        jobs = getattr(engine, "jobs", None)
+        if jobs is None or not hasattr(jobs, "list_jobs"):
+            return False
+        for j in jobs.list_jobs():
+            if j.kind == "fixate" and j.target_id == entry_id:
+                return True
+        return False
+
+    def _can_pay(self, engine: object, cost: dict) -> bool:
+        for rid, amt in (cost or {}).items():
+            if engine.economy.get(rid) + 1e-9 < float(amt):
+                return False
+        return True
 
     # ---- 门控查询 ---------------------------------------------------
     def is_unlocked(self, entry_id: str) -> bool:
@@ -131,24 +171,63 @@ class RecoverySystem:
             return f"未知条目: {entry_id}"
         if self.status.get(entry_id) != "active":
             return "只能固化已恢复且尚未永久的条目（先 recover）。"
+        if entry_id in self.queued:
+            return None                      # 已在队列里（幂等）
         cost = e.get("fixate_cost", {})
-        for rid, amt in cost.items():
-            if not engine.economy.take(rid, float(amt)):
-                for rid2, amt2 in cost.items():
-                    if rid2 == rid:
-                        break
-                    engine.economy.add(rid2, float(amt2))
-                return f"固化资源不足：缺 {rid} {amt:g}。"
+        if not self._can_pay(engine, cost):
+            miss = "、".join(f"{k} {float(v):g}" for k, v in cost.items()
+                             if engine.economy.get(k) < float(v))
+            return f"固化资源不足：缺 {miss}。"
         unit = engine.units.assign_any("fixate")
         if unit is None:
-            for rid, amt in cost.items():
-                engine.economy.add(rid, float(amt))
-            return "没有空闲执行单元执行固化作业。"
+            # BUG-5：拿不到空闲单元不报错，改为排队；材料**不预扣**（真开工时才扣）
+            self.queued.append(entry_id)
+            left = self.expires_in(engine, entry_id)
+            left_txt = f"剩 {left:.0f}s" if left is not None else "窗口未知"
+            engine.log(
+                f"[数据库] 没有空闲执行单元：{e['name']} 的烧录固化**已排队**，"
+                f"单元一空出就自动开工（临时窗口仍在走，{left_txt}）。"
+                "想更快就 unassign/mothball 一个不急的设施腾单元。",
+                level="warn", category="memory", recover=f"entry:{entry_id}")
+            return None
+        for rid, amt in cost.items():
+            engine.economy.take(rid, float(amt))   # 上面已确认付得起
+        self._begin(engine, entry_id, unit)
+        return None
+
+    def _begin(self, engine: object, entry_id: str, unit: object) -> None:
+        """开工一次 fixate 作业（队列与直接下令共用）。"""
+        e = self.entries[entry_id]
         dur = 6.0 / max(self._eff(engine), 1e-9)
         engine.jobs.add("fixate", unit.id, entry_id, dur,
                         {"entry": entry_id})
-        engine.log(f"[数据库] 烧录固化开始：{e['name']}（{dur:.0f}s）。")
-        return None
+        engine.log(f"[数据库] 烧录固化开始：{e['name']}（单元 {unit.id}，"
+                   f"{dur:.0f}s）。已开工的烧录不会中途丢失。")
+
+    def _serve_queue(self, engine: object) -> None:
+        """把排队的 fixate 逐个开工（FIFO；材料/单元任一不足就停在队首）。"""
+        while self.queued:
+            eid = self.queued[0]
+            e = self.entries.get(eid, {})
+            if self.status.get(eid) != "active":
+                self.queued.pop(0)
+                self._warned.discard(eid)
+                engine.log(
+                    f"[数据库] 排队中的固化未能开工：条目「{e.get('name', eid)}」"
+                    "已不再是临时状态（已过期或被记忆崩溃清掉）。",
+                    level="warn", category="memory")
+                continue
+            if not self._can_pay(engine, e.get("fixate_cost", {})):
+                break                        # 材料还没攒够 → 继续等
+            unit = engine.units.assign_any("fixate")
+            if unit is None:
+                break                        # 没空闲单元 → 继续等
+            for rid, amt in e.get("fixate_cost", {}).items():
+                engine.economy.take(rid, float(amt))
+            self.queued.pop(0)
+            self._begin(engine, eid, unit)
+            if self.expires_in(engine, eid) is None:
+                break
 
     # ---- 作业完成 ---------------------------------------------------
     def _on_job_done(self, payload: dict) -> None:
@@ -161,15 +240,22 @@ class RecoverySystem:
             return
         if kind == "recover":
             self.status[entry_id] = "active"
-            ttl = float(e.get("temporary_ttl", 90.0))
+            ttl = self.ttl_of(entry_id)
             self.active_until[entry_id] = self._engine.clock.time + ttl
+            self._warned.discard(entry_id)
             stat_bump(self._engine, "recovered")
             self._engine.log(
-                f"[数据库] {e['name']} 已恢复 —— 临时可用 {ttl:.0f}s，"
-                "速速 fixate 固化或趁热使用！")
+                f"[数据库] {e['name']} 已恢复 —— 临时可用 {ttl:.0f}s（游戏时间，"
+                "暂停不流逝），速速 fixate 固化或趁热使用！"
+                + ("（没有空闲单元也没关系：fixate 会自动排队）"
+                   if self._engine.units.count_idle() <= 0 else ""),
+                recover=f"entry:{entry_id}")
         else:
             self.status[entry_id] = "permanent"
             self.active_until.pop(entry_id, None)
+            self._warned.discard(entry_id)
+            if entry_id in self.queued:
+                self.queued.remove(entry_id)
             stat_bump(self._engine, "fixated")
             self._engine.log(f"[数据库] {e['name']} 已永久固化。"
                              "从此不再因记忆崩溃丢失。")
@@ -184,29 +270,64 @@ class RecoverySystem:
         for eid in lost:
             self.status[eid] = "locked"
             self.active_until.pop(eid, None)
+            self._warned.discard(eid)
+            if eid in self.queued:
+                self.queued.remove(eid)
         names = "、".join(self.entries[eid]["name"] for eid in lost)
         self._engine.log(f"[数据库] 记忆崩溃！未固化条目已丢失：{names}。"
                          "已固化条目安然无恙。")
         self._sync_efficiency()
 
-    # ---- 每 tick：检查临时条目过期 ----------------------------------
+    # ---- 每 tick：服务排队 + 过期 + 倒计时告警 ------------------------
     def tick(self, engine: object, dt: float) -> None:
         now = engine.clock.time
-        expired = [eid for eid, st in self.status.items()
-                   if st == "active"
-                   and self.active_until.get(eid, 0.0) <= now]
+        self._serve_queue(engine)
+        # 过期：已经开始烧录的条目（有 fixate 作业在跑）不掉 —— 这是明确承诺
+        expired = []
+        for eid, st in self.status.items():
+            if st != "active":
+                continue
+            if self.active_until.get(eid, 0.0) > now:
+                continue
+            if self._fixate_running(engine, eid):
+                continue
+            expired.append(eid)
         for eid in expired:
             self.status[eid] = "locked"
             self.active_until.pop(eid, None)
+            self._warned.discard(eid)
+            if eid in self.queued:
+                self.queued.remove(eid)
+                engine.log(f"[数据库] 条目「{self.entries[eid]['name']}」"
+                           "在排队等单元时窗口耗尽 —— 已丢失（重做要再付一次"
+                           "恢复材料）。下次记得早点腾单元。",
+                           level="warn", category="memory")
+                continue
             engine.log(f"[数据库] 条目「{self.entries[eid]['name']}」"
-                       "未及时固化，已从易失存储中丢失。")
+                       "未及时固化，已从易失存储中丢失。",
+                       level="warn", category="memory")
         if expired:
             self._sync_efficiency()
+        # 倒计时告警：剩 30s 时提醒一次（进警告看板，可点击跳转）
+        for eid, st in self.status.items():
+            if st != "active" or eid in self._warned:
+                continue
+            left = self.expires_in(engine, eid)
+            if left is None or left > 30.0:
+                continue
+            self._warned.add(eid)
+            tail = ("（固化已排队，等空闲单元）" if eid in self.queued
+                    else "（还没 fixate）")
+            engine.log(f"[数据库] 「{self.entries[eid]['name']}」临时窗口只剩 "
+                       f"{left:.0f}s{tail}，过期即丢失。",
+                       level="warn", category="memory",
+                       recover=f"entry:{eid}")
 
     # ---- 存档 -------------------------------------------------------
     def to_dict(self) -> dict:
         return {"status": dict(self.status),
                 "unit_bonus_granted": self._unit_bonus_granted,
+                "queued": list(self.queued),
                 "active_until": {k: v for k, v in self.active_until.items()}}
 
     def load(self, data: dict) -> None:
@@ -215,5 +336,9 @@ class RecoverySystem:
             self.status.setdefault(eid, "locked")
         self.active_until = {
             k: float(v) for k, v in data.get("active_until", {}).items()}
+        # 旧档没有 queued 字段 → 空队列（向后兼容）
+        self.queued = [eid for eid in data.get("queued", [])
+                       if self.status.get(eid) == "active"]
+        self._warned = set()
         self._unit_bonus_granted = int(data.get("unit_bonus_granted", 0) or 0)
         self._sync_efficiency()

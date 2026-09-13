@@ -1,5 +1,5 @@
 {
- "_comment": "数据库恢复树：研究 = 从受损存储中恢复知识条目。条目恢复后临时有效，需消耗资源固化才永久；未固化条目会随时间或记忆崩溃丢失。unlocks_* 解锁配方/设施。",
+ "_comment": "数据库恢复树：研究 = 从受损存储中恢复知识条目。条目恢复后临时有效，需消耗资源固化才永久；未固化条目会随时间或记忆崩溃丢失。unlocks_* 解锁配方/设施。 另：temporary_ttl_default = 临时窗口默认值（游戏秒；暂停不流逝）。",
  "entries": [
   {
    "id": "db_coking",
@@ -14,7 +14,7 @@
     "scrap_alloy": 8.0
    },
    "duration": 10.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "unlocks_facility": [
     "cokery"
    ]
@@ -32,7 +32,7 @@
     "scrap_alloy": 12.0
    },
    "duration": 15.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "unlocks_facility": [
     "blast_furnace"
    ]
@@ -50,7 +50,7 @@
     "scrap_alloy": 15.0
    },
    "duration": 15.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "unlocks_facility": [
     "steel_mill"
    ]
@@ -69,7 +69,7 @@
     "scrap_alloy": 18.0
    },
    "duration": 20.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "unlocks_facility": [
     "sulfuric_plant"
    ]
@@ -87,7 +87,7 @@
     "scrap_alloy": 25.0
    },
    "duration": 25.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "unlocks_facility": [
     "ammonia_synth"
    ]
@@ -105,7 +105,7 @@
     "scrap_alloy": 15.0
    },
    "duration": 18.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "unlocks_facility": [
     "chloralkali_cell"
    ],
@@ -125,7 +125,7 @@
     "scrap_alloy": 20.0
    },
    "duration": 20.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_sulfuric",
     "db_ammonia"
@@ -148,7 +148,7 @@
     "scrap_alloy": 22.0
    },
    "duration": 22.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_steel"
    ],
@@ -169,7 +169,7 @@
     "scrap_alloy": 10.0
    },
    "duration": 12.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_coking"
    ],
@@ -191,7 +191,7 @@
     "scrap_alloy": 16.0
    },
    "duration": 18.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_sulfuric"
    ],
@@ -212,7 +212,7 @@
     "scrap_alloy": 22.0
    },
    "duration": 22.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_copper"
    ],
@@ -234,7 +234,7 @@
     "scrap_alloy": 12.0
    },
    "duration": 12.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_copper"
    ],
@@ -256,7 +256,7 @@
     "scrap_alloy": 18.0
    },
    "duration": 20.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_petrol"
    ],
@@ -277,7 +277,7 @@
     "scrap_alloy": 14.0
    },
    "duration": 16.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_petrol"
    ],
@@ -300,7 +300,7 @@
     "scrap_alloy": 30.0
    },
    "duration": 28.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_steel"
    ],
@@ -327,7 +327,7 @@
     "scrap_alloy": 35.0
    },
    "duration": 24.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_refractory"
    ],
@@ -352,7 +352,7 @@
     "scrap_alloy": 40.0
    },
    "duration": 30.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_sulfuric",
     "db_distill"
@@ -376,7 +376,7 @@
     "scrap_alloy": 30.0
    },
    "duration": 26.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_rare_earth",
     "db_petrol"
@@ -403,7 +403,7 @@
     "scrap_alloy": 45.0
    },
    "duration": 32.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_refractory",
     "db_chloralkali"
@@ -429,7 +429,7 @@
     "scrap_alloy": 20.0
    },
    "duration": 22.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_steel"
    ],
@@ -452,7 +452,7 @@
     "scrap_alloy": 16.0
    },
    "duration": 18.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_copper"
    ],
@@ -475,7 +475,7 @@
     "scrap_alloy": 22.0
    },
    "duration": 24.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_silicon"
    ],
@@ -497,7 +497,7 @@
     "scrap_alloy": 14.0
    },
    "duration": 16.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_steel"
    ],
@@ -519,7 +519,7 @@
     "scrap_alloy": 10.0
    },
    "duration": 12.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "grants": {
     "unit_efficiency": 0.25
    }
@@ -537,7 +537,7 @@
     "scrap_alloy": 12.0
    },
    "duration": 14.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_unit_bus"
    ],
@@ -559,7 +559,7 @@
     "steel": 4.0
    },
    "duration": 16.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_unit_bus",
     "db_steel"
@@ -582,7 +582,7 @@
     "steel": 6.0
    },
    "duration": 18.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_unit_parallel",
     "db_rare_catalyst"
@@ -605,7 +605,7 @@
     "scrap_alloy": 15.0
    },
    "duration": 16.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_steel"
    ],
@@ -627,7 +627,7 @@
     "steel": 6.0
    },
    "duration": 18.0,
-   "temporary_ttl": 90.0,
+   "temporary_ttl": 180.0,
    "depends_on": [
     "db_steel",
     "db_unit_bus"
@@ -636,5 +636,6 @@
     "unit_factory"
    ]
   }
- ]
+ ],
+ "temporary_ttl_default": 180.0
 }

@@ -105,6 +105,13 @@ def build_report(engine, router=None) -> dict:
                     "depends_on": e.get("depends_on", []),
                     "unlocks_facility": e.get("unlocks_facility", []),
                     "grants": e.get("grants", {})}
+            if st == "active":
+                # 临时窗口倒计时（游戏秒；BUG-5）+ 是否已排队等空闲单元
+                left = (rec.expires_in(engine, eid)
+                        if hasattr(rec, "expires_in") else None)
+                item["expires_in"] = round(left, 1) if left is not None else None
+                item["fixate_queued"] = bool(
+                    hasattr(rec, "is_queued") and rec.is_queued(eid))
             entries[{"locked": "locked", "active": "active",
                      "permanent": "permanent"}[st]].append(item)
             if item["optional"]:
@@ -259,6 +266,31 @@ def suggest_actions(engine, router=None, limit: int = 5) -> List[dict]:
                      if p.state in ("claimed", "developed", "depleted")
                      and p.kind == "empty"
                      and not any(f.plot_id == p.id for f in facs)), None)
+
+    # 0) BUG-5：临时条目即将过期 → 最高优先级，先保住知识
+    if rec is not None and hasattr(rec, "expires_in"):
+        urgent = []
+        for eid, st in rec.status.items():
+            if st != "active":
+                continue
+            left = rec.expires_in(engine, eid)
+            if left is None or left > 40.0:
+                continue
+            urgent.append({"id": eid,
+                           "name": rec.entries.get(eid, {}).get("name", eid),
+                           "expires_in": left,
+                           "fixate_cost": rec.entries.get(eid, {}).get(
+                               "fixate_cost", {}),
+                           "fixate_queued": rec.is_queued(eid)})
+        if urgent:
+            urgent.sort(key=lambda e: e["expires_in"])
+            e = urgent[0]
+            queued = "（已排队等单元）" if e["fixate_queued"] else ""
+            add(f"fixate {e['id']}",
+                f"临时条目「{e['name']}」只剩 {e['expires_in']:.0f}s{queued}，"
+                "过期就丢（要重付恢复材料）",
+                _missing(engine, e["fixate_cost"], router)
+                or _unit_block(idle))
 
     # 1) 还没电：第一优先
     has_power = any(_is_power(f) for f in facs if not f.under_construction)

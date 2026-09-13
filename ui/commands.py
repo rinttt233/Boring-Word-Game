@@ -314,11 +314,20 @@ class CommandRouter:
                        "permanent": "已固化"}
         for e in rec.entry_list():
             st = state_names.get(e.get("state", "locked"), e.get("state"))
+            # BUG-5：临时条目给出**剩余游戏秒**倒计时（<30s 标 ! 提醒）
+            extra = ""
+            if e.get("state") == "active":
+                left = rec.expires_in(self.engine, e["id"])
+                if left is not None:
+                    mark = "!" if left <= 30 else ""
+                    extra = f" | 剩余 {left:.0f}s{mark}"
+                    if rec.is_queued(e["id"]):
+                        extra += "（固化已排队）"
             unlocks = e.get("unlocks_facility", [])
             u = ("解锁: " + ",".join(unlocks)) if unlocks else ""
             cost = " ".join(f"{k}:{v:g}" for k, v in e.get("cost", {}).items())
             self.engine.log(
-                f"  {e['id']} {e['name']} [{st}] | 恢复需 {cost} | {u}")
+                f"  {e['id']} {e['name']} [{st}{extra}] | 恢复需 {cost} | {u}")
             self.engine.log(f"      {e.get('desc', '')}")
 
     def _cmd_recover(self, args):
@@ -338,6 +347,11 @@ class CommandRouter:
         err = rec.fixate(self.engine, args[0]) if rec else "无恢复系统"
         if err:
             self.engine.log(f"[数据库] {err}")
+        elif rec is not None and rec.is_queued(args[0]):
+            # fixate 已排队（没有空闲单元），上面的排队日志已给出细节
+            self.engine.log(
+                f"[数据库] {args[0]} 的固化在队列里：单元一空出就自动开工，"
+                "期间临时窗口照常流逝（`units` 看谁占着单元）。")
 
     # ---- 勘探/扩展命令 ---------------------------------------------
     def _cmd_survey(self, args):

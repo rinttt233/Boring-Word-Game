@@ -138,5 +138,6 @@
 | S-1 执行单元无扩容线（终局数学不可达） | ✅ 确认（终局槽位 ~23 vs 可获 ~10–11；报告方用 `dbg unit` 补到 41 才走完） | ⏳ **P1**：②b1 单元制造厂转主线 + b2 每固化 2 条主线 +1（上限 +6） |
 | S-2 空地稀缺 + 地块锁死 | ✅ 确认（约 80 块地中空地 ~12，工厂只能建空地且不可拆） | ⏳ **P1**：③拆除返还 50% + depleted 复用（复用已在 P0 完成） |
 | S-5 记忆终局量级 / D-1~D-5 文档缺口 | 合理 | P0 已修 D-4（report 带 seed/command_count）；④运转口径与补偿在 P1；其余随 P2 |
+| BUG-5 临时窗口 90s + fixate 不排队 | ✅ **部分确认**：TTL 是**游戏时间**（"按墙钟走"不成立；暂停不流逝），但 90s 确实短于"抢单元 + 排队 + 建造"，且 `fixate` 拿不到单元就报错 | ✅ **已修（插批 BUG-5）**：窗口 90 → **180 游戏秒**（`recovery.json: temporary_ttl_default`，29 条统一）；`fixate` **自动排队**（FIFO，材料不预扣，排队不冻结窗口）；**已开工的烧录不会中途丢失**；`entries`/GUI 显示倒计时（<30s 标 `!`）、剩 30s 写一次 warn、`report.entries.active[].expires_in` + `fixate_queued`、`suggest` 最优先提示；`tests/test_recovery_window.py`（13 例） |
 
 > P0 回归用例：`tests/test_p0_fixes.py`（16 例）。复现/验证命令见两份报告原文。

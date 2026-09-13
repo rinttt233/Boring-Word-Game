@@ -48,8 +48,12 @@ def build_engine(seed=None) -> Engine:
     engine.bootstrap_world(boot["plots"])
     # 注册模块（模块 = 玩法循环/系统）
     engine.registry.register("memory", MemorySystem(load_json("memory.json")))
-    engine.registry.register("recovery",
-                             RecoverySystem(load_json("recovery.json")["entries"]))
+    _rec_cfg = load_json("recovery.json")
+    engine.registry.register(
+        "recovery",
+        RecoverySystem(_rec_cfg["entries"],
+                       default_ttl=_rec_cfg.get("temporary_ttl_default",
+                                                180.0)))
     engine.registry.register("survey",
                              SurveySystem(load_json("regions.json"), seed=seed))
     engine.registry.register("claim", ClaimSystem())

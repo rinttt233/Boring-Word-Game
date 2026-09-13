@@ -2,6 +2,18 @@
 #
 # ASCII-only on purpose: Windows PowerShell 5.1 mis-reads UTF-8 script files.
 #
+# ---------------------------------------------------------------------------
+# If github.com is blocked by a hosts-file entry (this machine had
+# "127.0.0.1 github.com #S302"), DNS is redirected to localhost and git/gh
+# cannot connect. Workaround WITHOUT touching the system hosts file:
+#   1) start the local CONNECT proxy (maps github.com to reachable IPs):
+#        python -X utf8 tools\gh_proxy.py --port 8443
+#   2) point git/gh at it for the commands:
+#        $env:HTTPS_PROXY = "http://127.0.0.1:8443"
+#        $env:HTTP_PROXY  = "http://127.0.0.1:8443"
+#   3) run this script (TLS stays end-to-end; github.com's cert is still verified)
+# ---------------------------------------------------------------------------
+#
 # Usage (run in YOUR OWN terminal, not inside a sandboxed agent shell):
 #   powershell -ExecutionPolicy Bypass -File tools\push_to_github.ps1 -Create
 #   powershell -ExecutionPolicy Bypass -File tools\push_to_github.ps1

@@ -3,6 +3,9 @@
 科幻文字经营游戏。玩家扮演降落到类地行星的受损 ASI：开采资源、扩展土地、
 勘探矿脉、恢复数据库——并在记忆劣化中求生。目标：建成可靠数据库，消除劣化。
 
+**版本列表**：[`RELEASES.md`](RELEASES.md)（各版本主题/日期/要点）；完整更新报告见 [`CHANGELOG.md`](CHANGELOG.md)。
+仓库用 git 标签记录版本：`v1.2`、`v1.3`、`v1.3.1`；发布流程见 [`docs/versioning.md`](docs/versioning.md)。
+
 ## 运行
 
 ```bash

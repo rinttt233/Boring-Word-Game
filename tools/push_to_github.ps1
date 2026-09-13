@@ -1,0 +1,71 @@
+# push_to_github.ps1 -- push this repository (source + version tags) to GitHub.
+#
+# ASCII-only on purpose: Windows PowerShell 5.1 mis-reads UTF-8 script files.
+#
+# Usage (run in YOUR OWN terminal, not inside a sandboxed agent shell):
+#   powershell -ExecutionPolicy Bypass -File tools\push_to_github.ps1 -Create
+#   powershell -ExecutionPolicy Bypass -File tools\push_to_github.ps1
+#   powershell -ExecutionPolicy Bypass -File tools\push_to_github.ps1 -Force
+#
+# Auth options (pick one):
+#   1) gh auth login            (recommended; then just run this script)
+#   2) $env:GITHUB_TOKEN = 'ghp_...'   (classic PAT with 'repo' scope)
+#   3) git credential manager already has a GitHub login for https://github.com
+#
+param(
+    [string]$Repo = "rinttt233/Boring-Word-Game",
+    [string]$Branch = "main",
+    [switch]$Create,   # create the remote repo via gh if it does not exist
+    [switch]$Force     # allow non-fast-forward (--force-with-lease)
+)
+
+$ErrorActionPreference = "Stop"
+$root = Split-Path -Parent $PSScriptRoot
+Set-Location $root
+$url = "https://github.com/$Repo.git"
+
+Write-Output "[push] repo   : $Repo"
+Write-Output "[push] branch : $Branch"
+Write-Output ("[push] tags   : " + ((git tag -l) -join ", "))
+
+# --- auth check ------------------------------------------------------------
+$token = $env:GITHUB_TOKEN
+if ($token) {
+    Write-Output "[push] auth   : GITHUB_TOKEN (one-shot URL, not stored in .git/config)"
+} else {
+    $gh = Get-Command gh -ErrorAction SilentlyContinue
+    if ($gh) {
+        gh auth status 2>&1 | Out-String | Write-Output
+    } else {
+        Write-Output "[push] gh CLI not found; will rely on git credential manager."
+    }
+}
+
+# --- remote ----------------------------------------------------------------
+$existing = (git remote 2>$null)
+if ($existing -contains "origin") {
+    Write-Output "[push] remote origin already configured, keeping it."
+} else {
+    git remote add origin $url
+    Write-Output "[push] remote origin added: $url"
+}
+
+if ($Create) {
+    $gh = Get-Command gh -ErrorAction SilentlyContinue
+    if (-not $gh) { throw "gh CLI is required for -Create" }
+    Write-Output "[push] gh repo create (skip if it already exists)"
+    gh repo create $Repo --public --source=. --remote=origin 2>&1 | Write-Output
+}
+
+# --- push ------------------------------------------------------------------
+$pushTarget = if ($token) { "https://x-access-token:$token@github.com/$Repo.git" } else { "origin" }
+$forceArg = @()
+if ($Force) { $forceArg = @("--force-with-lease") }
+
+Write-Output "[push] pushing branch $Branch ..."
+git push $pushTarget "${Branch}:${Branch}" @forceArg
+Write-Output "[push] pushing tags ..."
+git push $pushTarget --tags @forceArg
+
+Write-Output "[push] done. Now open: https://github.com/$Repo/releases"
+Write-Output "[push] tip: attach releases/v<version>/ zips as GitHub Release assets."

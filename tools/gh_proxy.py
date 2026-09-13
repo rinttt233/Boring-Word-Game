@@ -66,41 +66,57 @@ def probe(host: str, ip: str, port: int = 443, timeout: float = 6.0) -> bool:
 
 _ORDER: dict = {}
 _order_lock = threading.Lock()
+_ORDER_TTL = 180.0          # 健康排序的保鲜期；过期重探
 
 
-def ranked_ips(host: str):
+def ranked_ips(host: str, force: bool = False):
     """按健康探测结果排序的候选 IP（结果粘性缓存，避免每次连接都探测）。"""
-    with _order_lock:
-        cached = _ORDER.get(host)
-    if cached:
-        return cached
     cands = MAP.get(host.lower())
     if not cands:
         return None
+    now = time.time()
+    with _order_lock:
+        cached = _ORDER.get(host)
+    if cached and not force and now - cached[0] < _ORDER_TTL:
+        return list(cached[1])
     good = [ip for ip in cands if probe(host, ip)]
     if not good:
         log(f"探测 {host}: 全部候选不可用，退回原始顺序 {cands}")
         good = list(cands)
     log(f"探测 {host}: 可用 {good}")
     with _order_lock:
-        _ORDER[host] = good
-    return good
+        _ORDER[host] = (now, list(good))
+    return list(good)
+
+
+def _promote(host: str, ip: str) -> None:
+    """把刚连通的 IP 提到队首，后续连接优先复用它。"""
+    with _order_lock:
+        entry = _ORDER.get(host)
+        order = list(entry[1]) if entry else []
+        if ip in order:
+            order.remove(ip)
+        order.insert(0, ip)
+        _ORDER[host] = (time.time(), order)
 
 
 def dial(host: str, port: int) -> socket.socket:
     ips = ranked_ips(host) if port == 443 else None
     if ips:
+        cands = list(MAP.get(host.lower(), []))
         last = None
-        for ip in ips:
+        for ip in ips + [x for x in cands if x not in ips]:
             try:
                 s = socket.create_connection((ip, port), timeout=15)
                 log(f"dial {host}:{port} -> {ip} OK")
+                _promote(host, ip)
                 return s
             except OSError as e:
                 last = e
                 log(f"dial {host}:{port} -> {ip} 失败: {e}")
-                with _order_lock:                # 剔除坏 IP，下次换下一个
-                    _ORDER[host] = [x for x in ips if x != ip] or list(ips)
+        # 全灭：丢掉这份排序缓存，下一次连接会重新做健康探测
+        with _order_lock:
+            _ORDER.pop(host, None)
         raise OSError(f"所有映射 IP 均失败: {last}")
     s = socket.create_connection((host, port), timeout=15)   # 兜底：系统解析
     log(f"dial {host}:{port} -> 系统解析 OK")

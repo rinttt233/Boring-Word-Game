@@ -1,6 +1,7 @@
 # 版本列表（Release List）
 
-> 本仓库用 **git 标签**记录版本；每个版本的完整更新报告见 [`CHANGELOG.md`](CHANGELOG.md)。
+> 本仓库用 **git 标签**记录版本，并把每个版本发布到 **GitHub Releases**（见下方「GitHub Release 下载」）；
+> 每个版本的完整更新报告见 [`CHANGELOG.md`](CHANGELOG.md)。
 > 版本号规则见 [`docs/versioning.md`](docs/versioning.md)。
 
 | 版本 | 标签 | 日期 | 主题 | 本地归档 | 快照 |
@@ -40,6 +41,28 @@
 每个版本的**可运行快照**在本地 `releases/v<版本>/`（不入库），需要分发时可：
 - 直接把 `releases/v<版本>/` 打包成 zip，作为 GitHub Release 附件上传；
 - 或从对应标签自行 checkout：`git checkout v1.3.1`。
+
+生成附件与说明（含排除规则）：
+
+```bash
+python -X utf8 tools/make_release_notes.py --version 1.3.1
+# dist/release-notes-v1.3.1.md + dist/Boring-Word-Game-v1.3.1.zip
+# 打包时排除 saves/ releases/ _refactor_backup/ dist/ __pycache__/，
+# 以及只作本地留档的 AI 试玩报告（AI-playtest-report.txt / AI-playtest-code-analysis.txt）。
+```
+
+## GitHub Release 下载
+
+| 版本 | Release 页面 | 附件（sha256） |
+|---|---|---|
+| 1.3.1 | [releases/tag/v1.3.1](https://github.com/rinttt233/Boring-Word-Game/releases/tag/v1.3.1) | `Boring-Word-Game-v1.3.1.zip`（108 文件，346 KB，`6ab578cf…7151`） |
+| 1.3 | [releases/tag/v1.3](https://github.com/rinttt233/Boring-Word-Game/releases/tag/v1.3) | `Boring-Word-Game-v1.3.zip`（91 文件，259 KB，`f119768b…9bb9`） |
+| 1.2 | [releases/tag/v1.2](https://github.com/rinttt233/Boring-Word-Game/releases/tag/v1.2) | `Boring-Word-Game-v1.2.zip`（81 文件，206 KB，`ad3a2db1…0ada`） |
+
+> 本机 `github.com` 被 hosts 屏蔽，推送/发布需先起本地代理：
+> `python -X utf8 tools/gh_proxy.py --port 8443`，再设
+> `$env:HTTPS_PROXY=http://127.0.0.1:8443` 并用 `git -c http.sslBackend=openssl push`。
+> `gh release create` 若带附件失败会回滚整个 Release —— **先建 Release，再单独 `gh release upload`**。
 
 ## 发布新版本（本项目约定）
 

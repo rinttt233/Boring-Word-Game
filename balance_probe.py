@@ -29,11 +29,18 @@ def spawn_claimed(eng, kind, substance=None, grade=0, reserve=0):
             and p.state == "claimed"][-1]
 
 
-def build_staff(eng, ind, plot_id, def_id):
+def build_staff(eng, ind, plot_id, def_id, max_s=90):
     err = ind.build(eng, plot_id, def_id)
     assert err is None, f"build {def_id}@{plot_id}: {err}"
     fid = [f.id for f in ind.facilities.values()
            if f.plot_id == plot_id][-1]
+    # 建造耗时（批次1.5 起）：等完工再派员 —— 否则 assign 会被拒（仍在建造中），
+    # 设施永远不运转（探针自 1.5 起一直踩这个坑）。
+    t = 0.0
+    while t < max_s and ind.facilities[fid].under_construction:
+        eng.tick(0.25)
+        t += 0.25
+    assert not ind.facilities[fid].under_construction, f"{def_id} 建造超时"
     ind.assign(eng, fid)
     return fid
 
@@ -71,10 +78,10 @@ def part1_numeric_invariants():
     """不依赖 RNG 的数值平衡断言。"""
     print("=== 第一部分: 数值不变量 ===")
     ok = True
-    # I1: 开局煤 60t，电厂耗 0.4/s → 150s；最近煤矿 survey 8s+claim 3s
-    #     窗口 150s 足够（安全边际 >10x）
-    margin = (60.0 / 0.4) / (8.0 + 3.0)
-    print(f"  I1 开局煤窗口: 60/0.4={150:.0f}s vs 找煤所需 ~11s, "
+    # I1: 开局煤 120t（A12 ①），电厂耗 0.4/s → 300s；最近煤矿 survey 8s+claim 3s
+    #     窗口 300s 足够（安全边际 >10x）
+    margin = (120.0 / 0.4) / (8.0 + 3.0)
+    print(f"  I1 开局煤窗口: 120/0.4={300:.0f}s vs 找煤所需 ~11s, "
           f"安全边际 {margin:.1f}x")
     ok &= margin > 5
     # I2: WRECK1 残骸 180t @ 1.2/s = 150s 拆完 → 奖励单元节奏

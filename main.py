@@ -19,6 +19,7 @@ from systems.environment import EnvironmentSystem
 from systems.industry import IndustrySystem
 from systems.maintenance import MaintenanceSystem
 from systems.memory import MemorySystem
+from systems.power import PowerSystem
 from systems.recovery import RecoverySystem
 from systems.survey import SurveySystem
 from systems.wiki import WikiSystem, load_wiki_docs
@@ -65,6 +66,9 @@ def build_engine(seed=None) -> Engine:
     ref_grades = {s["id"]: float(s["ref_grade"]) for s in subs
                   if s.get("ref_grade")}
     maint = load_json("maintenance.json")
+    # 电力体系（批次4）：必须在 industry **之前**注册（tick 顺序=注册顺序），
+    # 这样本拍算好的优先级降载系数与容量余量，industry 当拍就能用上。
+    engine.registry.register("power", PowerSystem(load_json("power.json")))
     engine.registry.register(
         "industry",
         IndustrySystem(load_json("facilities.json")["facilities"],

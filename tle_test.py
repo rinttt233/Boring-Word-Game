@@ -8,6 +8,7 @@ sys.path.insert(0, ".")
 from main import build_engine
 
 eng = build_engine()
+eng.registry.get("power").install_unbounded()   # 端点聚焦产线数值：电网上限与本测试无关（批次4）
 eng.clock.resume()
 ind = eng.registry.get("industry")
 ind.instant_build = True     # 端点脚本聚焦产线数值；建造耗时见 tests/test_build_time.py

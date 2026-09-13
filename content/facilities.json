@@ -1,5 +1,5 @@
 {
- "_comment": "设施模板。requires_recovery = 需先恢复对应数据库条目才可建造（M2 恢复树）。kind=extractor 表示提取设施(动态配方)。",
+ "_comment": "设施模板。requires_recovery = 需先恢复对应数据库条目才可建造（M2 恢复树）。kind=extractor 表示提取设施(动态配方)。 批次4 起每座设施可带 power_priority（0 可选/1 生产/2 关键）：缺电时从低到高降载。",
  "facilities": [
   {
    "id": "power_plant",
@@ -13,7 +13,8 @@
    "recipe": "burn_coal",
    "slots": 1,
    "desc": "烧煤产电。ASI 一切设施运转的能源底座。",
-   "build_time": 8
+   "build_time": 8,
+   "power_priority": 2
   },
   {
    "id": "extractor",
@@ -29,7 +30,8 @@
    "power_use": 0.1,
    "slots": 1,
    "desc": "在矿脉/水源地块抽取资源，消耗电力，储量有限。",
-   "build_time": 5
+   "build_time": 5,
+   "power_priority": 2
   },
   {
    "id": "salvager",
@@ -43,7 +45,8 @@
    "slots": 1,
    "reward_unit_on_deplete": true,
    "desc": "拆解坠毁残骸回收合金；枯竭时可能回收出完整执行单元。",
-   "build_time": 6
+   "build_time": 6,
+   "power_priority": 2
   },
   {
    "id": "cokery",
@@ -58,7 +61,8 @@
    "slots": 1,
    "requires_recovery": "db_coking",
    "desc": "煤干馏出焦炭。高炉燃料。",
-   "build_time": 10
+   "build_time": 10,
+   "power_priority": 2
   },
   {
    "id": "blast_furnace",
@@ -74,7 +78,8 @@
    "slots": 1,
    "requires_recovery": "db_blast_furnace",
    "desc": "焦炭+铁矿石+石灰石→生铁。",
-   "build_time": 20
+   "build_time": 20,
+   "power_priority": 2
   },
   {
    "id": "steel_mill",
@@ -89,7 +94,8 @@
    "slots": 1,
    "requires_recovery": "db_steel",
    "desc": "生铁→钢。高压容器/结构材料。",
-   "build_time": 18
+   "build_time": 18,
+   "power_priority": 2
   },
   {
    "id": "sulfuric_plant",
@@ -104,7 +110,8 @@
    "slots": 1,
    "requires_recovery": "db_sulfuric",
    "desc": "硫磺→硫酸。化工之母。",
-   "build_time": 22
+   "build_time": 22,
+   "power_priority": 2
   },
   {
    "id": "ammonia_synth",
@@ -120,7 +127,8 @@
    "slots": 1,
    "requires_recovery": "db_ammonia",
    "desc": "高压合成氨。二战化工终极里程碑。",
-   "build_time": 25
+   "build_time": 25,
+   "power_priority": 2
   },
   {
    "id": "chloralkali_cell",
@@ -183,7 +191,8 @@
    "burn_efficiency": 0.55,
    "slots": 1,
    "desc": "烧任意燃气/燃料产电。用 fuel 命令切换燃料。",
-   "build_time": 8
+   "build_time": 8,
+   "power_priority": 2
   },
   {
    "id": "tar_tower",
@@ -230,7 +239,8 @@
    "slots": 1,
    "requires_recovery": "db_aluminum",
    "desc": "铝土矿+巨电→铝。电老虎。",
-   "build_time": 18
+   "build_time": 18,
+   "power_priority": 0
   },
   {
    "id": "cable_line",
@@ -277,7 +287,8 @@
    "slots": 1,
    "requires_recovery": "db_polymer",
    "desc": "乙烯加聚→聚乙烯。合成材料。",
-   "build_time": 14
+   "build_time": 14,
+   "power_priority": 0
   },
   {
    "id": "nickel_concentrator",
@@ -389,7 +400,8 @@
    "slots": 1,
    "requires_recovery": "db_alloy",
    "desc": "钢+铬+镍 → 不锈钢。耐蚀容器/管道。",
-   "build_time": 22
+   "build_time": 22,
+   "power_priority": 0
   },
   {
    "id": "superalloy_plant",
@@ -406,7 +418,8 @@
    "slots": 1,
    "requires_recovery": "db_alloy",
    "desc": "钢+镍+铬+钨 → 高温合金。",
-   "build_time": 24
+   "build_time": 24,
+   "power_priority": 0
   },
   {
    "id": "ammonia_v2_plant",
@@ -423,7 +436,8 @@
    "slots": 1,
    "requires_recovery": "db_alloy",
    "desc": "不锈钢高压容器 → 更高压合成氨，电耗更低。",
-   "build_time": 28
+   "build_time": 28,
+   "power_priority": 0
   },
   {
    "id": "rare_mill",
@@ -439,7 +453,8 @@
    "slots": 1,
    "requires_recovery": "db_rare_earth",
    "desc": "独居石重选/磁选富集 → 稀土精矿。",
-   "build_time": 16
+   "build_time": 16,
+   "power_priority": 0
   },
   {
    "id": "solvent_extractor",
@@ -455,7 +470,8 @@
    "slots": 2,
    "requires_recovery": "db_rare_earth",
    "desc": "硫酸酸浸+煤油萃取，逐级分离铈/镧/钕。",
-   "build_time": 26
+   "build_time": 26,
+   "power_priority": 0
   },
   {
    "id": "catalyst_v_line",
@@ -471,7 +487,8 @@
    "slots": 1,
    "requires_recovery": "db_rare_catalyst",
    "desc": "钒(铬矿伴生)+铈 → V2O5 系接触法催化剂。",
-   "build_time": 18
+   "build_time": 18,
+   "power_priority": 0
   },
   {
    "id": "catalyst_cc_line",
@@ -487,7 +504,8 @@
    "slots": 1,
    "requires_recovery": "db_rare_catalyst",
    "desc": "镧/钕改性分子筛 → 催化裂化催化剂。",
-   "build_time": 20
+   "build_time": 20,
+   "power_priority": 0
   },
   {
    "id": "sulfuric_v2_plant",
@@ -504,7 +522,8 @@
    "slots": 1,
    "requires_recovery": "db_rare_catalyst",
    "desc": "V2O5 催化层 → 相同硫磺更高效制酸。",
-   "build_time": 24
+   "build_time": 24,
+   "power_priority": 0
   },
   {
    "id": "cracker_v2_plant",
@@ -521,7 +540,8 @@
    "slots": 1,
    "requires_recovery": "db_rare_catalyst",
    "desc": "分子筛催化 → 石油更多轻质产物(汽油/乙烯)。",
-   "build_time": 22
+   "build_time": 22,
+   "power_priority": 0
   },
   {
    "id": "silicon_furnace",
@@ -537,7 +557,8 @@
    "slots": 1,
    "requires_recovery": "db_silicon",
    "desc": "石英砂+焦炭+巨电碳热还原 → 工业硅。",
-   "build_time": 26
+   "build_time": 26,
+   "power_priority": 0
   },
   {
    "id": "hcl_tower",
@@ -553,7 +574,8 @@
    "slots": 1,
    "requires_recovery": "db_silicon",
    "desc": "教材：Cl2+H2 燃烧化合 → HCl。",
-   "build_time": 16
+   "build_time": 16,
+   "power_priority": 0
   },
   {
    "id": "tcs_reactor",
@@ -569,7 +591,8 @@
    "slots": 1,
    "requires_recovery": "db_silicon",
    "desc": "教材：Si+3HCl→SiHCl3+H2(约300℃)。西门子法关键中间步。",
-   "build_time": 20
+   "build_time": 20,
+   "power_priority": 0
   },
   {
    "id": "silicon_plant",
@@ -586,7 +609,8 @@
    "slots": 1,
    "requires_recovery": "db_silicon",
    "desc": "高纯 CVD 还原 TCS → 9N 多晶硅。",
-   "build_time": 30
+   "build_time": 30,
+   "power_priority": 0
   },
   {
    "id": "coal_stove",
@@ -605,7 +629,8 @@
    ],
    "slots": 1,
    "desc": "烧煤/焦炭的早期小火炉。效率低但起步便宜。",
-   "build_time": 6
+   "build_time": 6,
+   "power_priority": 2
   },
   {
    "id": "large_coal_plant",
@@ -626,7 +651,8 @@
    "slots": 2,
    "requires_recovery": "db_large_thermal",
    "desc": "大型锅炉+汽轮机：固体燃料高吞吐、中高效率。",
-   "build_time": 20
+   "build_time": 20,
+   "power_priority": 2
   },
   {
    "id": "fluid_power_plant",
@@ -648,7 +674,8 @@
    "slots": 2,
    "requires_recovery": "db_large_thermal",
    "desc": "烧液体燃料(油类)与气体(煤气/氢)：吞吐大、效率高。",
-   "build_time": 18
+   "build_time": 18,
+   "power_priority": 2
   },
   {
    "id": "csp_plant",
@@ -667,7 +694,8 @@
    "slots": 1,
    "requires_recovery": "db_csp",
    "desc": "槽式聚光集热+储热：仅白天发电，沙暴/烟尘大幅削减。",
-   "build_time": 20
+   "build_time": 20,
+   "power_priority": 2
   },
   {
    "id": "solar_farm",
@@ -687,7 +715,8 @@
    "slots": 1,
    "requires_recovery": "db_pv",
    "desc": "多晶硅光电池：晴天出力高于光热，但沙暴/云尘下几乎归零(pv 削减最狠)。",
-   "build_time": 16
+   "build_time": 16,
+   "power_priority": 2
   },
   {
    "id": "wind_farm",
@@ -706,7 +735,8 @@
    "slots": 1,
    "requires_recovery": "db_wind",
    "desc": "风力机阵列：不分昼夜持续发电，沙暴时反而增强。",
-   "build_time": 16
+   "build_time": 16,
+   "power_priority": 2
   },
   {
    "id": "maintenance_depot",
@@ -722,7 +752,8 @@
    "slots": 1,
    "requires_recovery": "db_upkeep",
    "desc": "制造维护件的车间。恢复「设备维护」知识后，所有设施都开始消耗维护件。",
-   "build_time": 16
+   "build_time": 16,
+   "power_priority": 2
   },
   {
    "id": "unit_factory",
@@ -741,7 +772,8 @@
    "slots": 1,
    "requires_recovery": "db_units",
    "desc": "装配执行单元本体：约 200 秒 1 个（受单元效能加速），每个耗 16 钢 + 10 铜。把「单元数量」从固定资源变成可投资产能。",
-   "build_time": 22
+   "build_time": 22,
+   "power_priority": 0
   },
   {
    "id": "gas_shift",
@@ -757,7 +789,8 @@
    "slots": 1,
    "requires_recovery": "db_steel",
    "desc": "应对手段①转化：把积压的焦炉煤气变成氢。",
-   "build_time": 16
+   "build_time": 16,
+   "power_priority": 0
   },
   {
    "id": "vent_tower",
@@ -780,7 +813,8 @@
    "slots": 1,
    "requires_recovery": "db_coking",
    "desc": "应对手段②放空/焚烧：把多余气液直接烧掉（材料浪费，但立刻解除限产）。",
-   "build_time": 12
+   "build_time": 12,
+   "power_priority": 0
   },
   {
    "id": "injection_well",
@@ -805,7 +839,49 @@
    "slots": 1,
    "requires_recovery": "db_coking",
    "desc": "应对手段③回注/堆存：把副产物压进地下（容量 2000，装满即停）——不浪费但占空间，装满要继续建。",
-   "build_time": 14
+   "build_time": 14,
+   "power_priority": 0
+  },
+  {
+   "id": "battery_bank",
+   "name": "电池组",
+   "allowed_plot_kinds": [
+    "empty"
+   ],
+   "build_cost": {
+    "scrap_alloy": 20.0,
+    "steel": 8.0,
+    "copper": 6.0
+   },
+   "kind": "storage",
+   "capacity": 400.0,
+   "max_rate": 3.0,
+   "charge_efficiency": 0.9,
+   "slots": 1,
+   "requires_recovery": "db_copper",
+   "build_time": 16,
+   "power_priority": 1,
+   "desc": "余电入库、缺口放电：把空转的发电量存起来，缺电时顶上。充电效率 90%，最大充放 3.0/s。"
+  },
+  {
+   "id": "heat_storage",
+   "name": "蓄热罐",
+   "allowed_plot_kinds": [
+    "empty"
+   ],
+   "build_cost": {
+    "scrap_alloy": 18.0,
+    "steel": 6.0
+   },
+   "kind": "storage",
+   "capacity": 300.0,
+   "max_rate": 2.0,
+   "charge_efficiency": 0.75,
+   "slots": 1,
+   "requires_recovery": "db_steel",
+   "build_time": 14,
+   "power_priority": 1,
+   "desc": "熔盐/蒸汽蓄热：便宜、好造，但效率低（75%）、充放慢（2.0/s），适合中前期削峰填谷。"
   }
  ]
 }

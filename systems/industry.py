@@ -487,6 +487,9 @@ class IndustrySystem:
                 self._tick_vent(engine, f, d, dt, umul)
             elif d.get("kind") == "sink":
                 self._tick_sink(engine, f, d, dt, umul)
+            elif d.get("kind") == "storage":
+                # 储能设施的充放由 PowerSystem 统一调度（批次4），这里不动
+                continue
             else:
                 self._tick_recipe(engine, f, d, dt, pmul, umul)
 
@@ -535,8 +538,9 @@ class IndustrySystem:
                    dt: float, umul: float = 1.0) -> None:
         """放空塔（手段②）：销毁列表中的副产物，解除积压（材料被浪费）。"""
         pwr = float(d.get("power_use", 0.0)) * dt * umul
-        if pwr > 0 and self._consume(engine, {"electricity": pwr}) <= 0:
-            self._report_stall(engine, f, True, "缺电", "no_power")
+        if pwr > 0 and self._consume(engine, {"electricity": pwr}, d) <= 0:
+            if not self._shed_note(engine, f, d, {"electricity": pwr}):
+                self._report_stall(engine, f, True, "缺电", "no_power")
             return
         rate = float(d.get("vent_rate", 1.0)) * dt * umul
         total = 0.0
@@ -563,8 +567,9 @@ class IndustrySystem:
             self._report_stall(engine, f, True, "堆场已满", "sink_full")
             return
         pwr = float(d.get("power_use", 0.0)) * dt * umul
-        if pwr > 0 and self._consume(engine, {"electricity": pwr}) <= 0:
-            self._report_stall(engine, f, True, "缺电", "no_power")
+        if pwr > 0 and self._consume(engine, {"electricity": pwr}, d) <= 0:
+            if not self._shed_note(engine, f, d, {"electricity": pwr}):
+                self._report_stall(engine, f, True, "缺电", "no_power")
             return
         rate = float(d.get("sink_rate", 1.0)) * dt * umul
         moved = 0.0
@@ -598,10 +603,11 @@ class IndustrySystem:
         rate_mul = dt * umul
         need = {rid: float(r) * rate_mul
                 for rid, r in recipe.get("inputs", {}).items()}
-        factor = self._consume(engine, need)
+        factor = self._consume(engine, need, d)
         missing = not need or factor <= 0
-        self._report_stall(engine, f, missing, "输入不足",
-                           "no_input" if missing else "")
+        if missing:
+            if not self._shed_note(engine, f, d, need):
+                self._report_stall(engine, f, missing, "输入不足", "no_input")
         if factor <= 0:
             return
         f.unit_progress += rate * dt * umul * factor * pmul
@@ -617,19 +623,67 @@ class IndustrySystem:
                        f"（现共 {engine.units.count()} 个）。",
                        recover=f"fac:{f.id}")
 
-    def _consume(self, engine: object, need: Dict[str, float]) -> float:
-        """按需按可用比例尽力消耗，返回实际比例 [0,1]。"""
+    def _consume(self, engine: object, need: Dict[str, float],
+                 d: Optional[dict] = None) -> float:
+        """按需按可用比例尽力消耗，返回实际比例 [0,1]。
+
+        批次4 起：**电力**还要再乘"该设施优先级档位的供电比例"（缺电时从低到高
+        降载，而不是全厂一起半速）。`d` 传设施 def 才能拿到 power_priority。
+        """
         factor = 1.0
         for rid, amt in need.items():
             if amt <= 0:
                 continue
             avail = engine.economy.get(rid)
             factor = min(factor, avail / amt)
+        if d is not None and float(need.get("electricity", 0.0) or 0.0) > 0.0:
+            p = self._power_sys(engine)
+            if p is not None:
+                factor = min(factor, p.factor(p.priority_of(d)))
         if factor <= 0:
             return 0.0
         for rid, amt in need.items():
             engine.economy.take(rid, amt * factor)
         return factor
+
+    # ---- 电力体系（批次4）-------------------------------------------
+    @staticmethod
+    def _power_sys(engine: object):
+        getter = getattr(engine.registry, "get", None)
+        return getter("power") if getter is not None else None
+
+    def _power_headroom(self, engine: object) -> Optional[float]:
+        p = self._power_sys(engine)
+        return None if p is None else p.headroom(engine)
+
+    def _shed_note(self, engine: object, f: Facility, d: dict,
+                   need: Dict[str, float]) -> bool:
+        """缺电时给出更准确的原因：是被"优先级降载"停的，还是单纯没电。"""
+        p = self._power_sys(engine)
+        if p is None or float(need.get("electricity", 0.0) or 0.0) <= 0.0:
+            return False
+        pr = p.priority_of(d)
+        if p.factor(pr) <= 0.0:
+            self._report_stall(engine, f, True,
+                               f"缺电（{p.tier_name(pr)}档降载）", "shed")
+            return True
+        return False
+
+    def _grid_note(self, engine: object, f: Facility, want: float) -> float:
+        """发电设施受电网容量限制（A13）：返回可消纳比例 [0,1]。
+
+        余量小于容量的 `grid_full_ratio`（死区）时直接判"电网已满"并降载停机，
+        避免发电设施以 3% 的滑稽功率空转、玩家却看不出问题。
+        """
+        p = self._power_sys(engine)
+        if p is None or want <= 0.0:
+            return 1.0
+        head = p.headroom(engine)
+        if head <= p.capacity(engine) * p.grid_full_ratio:
+            self._report_stall(engine, f, True, "电网已满（消纳不了）",
+                              "grid_full")
+            return 0.0
+        return max(0.0, min(1.0, head / want))
 
     def _tick_recipe(self, engine: object, f: Facility, d: dict,
                      dt: float, pmul: float = 1.0,
@@ -640,14 +694,23 @@ class IndustrySystem:
             return
         # 单元效能提高节拍：输入与输出同乘（化学配比不变，只是更快）
         rate_mul = dt * umul
-        need = {rid: float(r) * rate_mul
+        # 电网容量（A13）：产出电力的配方受"还能消纳多少"限制（不白烧燃料）
+        elec_rate = float(recipe.get("outputs", {}).get("electricity", 0.0))
+        pre = 1.0
+        if elec_rate > 0:
+            pre = self._grid_note(engine, f, elec_rate * rate_mul * pmul)
+            if pre <= 0.0:
+                return
+        need = {rid: float(r) * rate_mul * pre
                 for rid, r in recipe.get("inputs", {}).items()}
-        factor = self._consume(engine, need)
+        factor = self._consume(engine, need, d) * pre
         missing = not need or factor <= 0
-        self._report_stall(engine, f, missing, "输入不足",
-                           "no_input" if missing else "")
+        if missing:
+            if not self._shed_note(engine, f, d, need):
+                self._report_stall(engine, f, missing, "输入不足", "no_input")
         if factor <= 0:
             return
+        self._report_stall(engine, f, False, "")
         # 副产物积压限产（批次3）：超限则整台设施降速（含主产物）
         bfac = self.backlog_factor(engine, recipe)
         if bfac < 1.0:
@@ -678,11 +741,12 @@ class IndustrySystem:
         # 电力消耗（随效能同比：干得更快也更费电）
         pwr = float(d.get("power_use", 0.0)) * dt * umul
         need = {"electricity": pwr} if pwr > 0 else {}
-        factor = self._consume(engine, need)
-        self._report_stall(engine, f, (need and factor <= 0), "缺电",
-                           "no_power" if (need and factor <= 0) else "")
+        factor = self._consume(engine, need, d)
         if need and factor <= 0:
+            if not self._shed_note(engine, f, d, need):
+                self._report_stall(engine, f, True, "缺电", "no_power")
             return
+        self._report_stall(engine, f, False, "")
         rate = float(d.get("extract_rate", 0.0))
         if plot.kind == Plot.KIND_WATER:
             gmul = 1.0
@@ -725,13 +789,20 @@ class IndustrySystem:
                                    f"该设施只接受 {','.join(allowed)} 燃料")
                 return
         burn_rate = float(d.get("burn_rate", 0.5))   # t/s 消耗
+        # 电网容量（A13）：烧出来的电得有人要 —— 满了就少烧，不白烧燃料
+        hv0 = self.heat_values.get(f.fuel, 0.0)
+        want = burn_rate * dt * umul * hv0 * float(d.get("burn_efficiency", 0.4)) \
+            * pmul
+        pre = self._grid_note(engine, f, want)
+        if pre <= 0.0:
+            return
         # 尽力烧（仓库不足按比例）
         avail = engine.economy.get(f.fuel)
         if avail <= 0:
             self._report_stall(engine, f, True, f"缺燃料 {f.fuel}", "no_fuel")
             return
         self._report_stall(engine, f, False, "")
-        consumed = min(burn_rate * dt * umul, avail)
+        consumed = min(burn_rate * dt * umul * pre, avail)
         engine.economy.take(f.fuel, consumed)
         eff = float(d.get("burn_efficiency", 0.4))
         out = consumed * hv * eff * pmul
@@ -767,6 +838,11 @@ class IndustrySystem:
         if out <= 0:
             self._report_stall(engine, f, False, "")
             return
+        # 电网容量（A13）：消纳不了就少发（可再生没有燃料成本，只损失出力）
+        pre = self._grid_note(engine, f, out)
+        if pre <= 0.0:
+            return
+        out *= pre
         self._report_stall(engine, f, False, "")
         engine.economy.add("electricity", out)
         f.produced_any = True

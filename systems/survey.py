@@ -17,6 +17,11 @@ class SurveySystem:
     def __init__(self, regions_cfg: dict, seed=None) -> None:
         self.regions = regions_cfg.get("regions", [])
         self.surveys_per_ring = int(regions_cfg.get("surveys_per_ring", 3))
+        # A12 ③ 保底：该圈层"首次勘探"若还没见过这种矿，就保底产出它
+        # （圈1 保底煤矿）—— 免得开局被勘探运气卡死（煤 150 秒见底、两探无煤）。
+        # 只在该物质从未出现在世界里时生效：天然幂等，不需要额外存档字段。
+        self.guarantee = {int(k): str(v) for k, v in
+                          (regions_cfg.get("guarantee") or {}).items()}
         # 可注入种子以便复现同一局（盲测/回归需要"同 seed 同结果"）
         self._rng = random.Random(seed)
 
@@ -57,9 +62,39 @@ class SurveySystem:
         cfg = self.ring_cfg(ring)
         if cfg is None:
             return
+        want = self.guarantee.get(ring)
+        if want and not self._seen(want):
+            plot = self._spawn_guaranteed(ring, cfg, want)
+            self._engine.log(
+                f"[勘探] 圈{ring} 回报：{plot.describe()}"
+                f"（保底：本局还没见过{want}，首次勘探必给）")
+            return
         plot = self._roll_plot(self._engine, ring, cfg)
         self._engine.log(
             f"[勘探] 圈{ring} 回报：{plot.describe()}")
+
+    def _seen(self, substance: str) -> bool:
+        """世界里是否已经出现过这种矿（含已占领/枯竭地块）。"""
+        return any(p.substance == substance
+                   for p in self._engine.world.plots.values()
+                   if p.state != Plot.STATE_UNKNOWN)
+
+    def _spawn_guaranteed(self, ring: int, cfg: dict,
+                          substance: str) -> Plot:
+        """按池内该类矿的区间生成保底地块（池里没用该类则用兜底区间）。"""
+        pool = next((p for p in cfg["pools"]
+                     if p.get("kind") == Plot.KIND_ORE
+                     and p.get("substance") == substance), None)
+        g0, g1 = (pool or {}).get("grade", [50.0, 70.0])
+        r0, r1 = (pool or {}).get("reserve", [2000.0, 5000.0])
+        plot = self._engine.world.spawn(
+            ring=ring, kind=Plot.KIND_ORE, substance=substance,
+            grade=round(self._rng.uniform(g0, g1), 1),
+            reserve=round(self._rng.uniform(r0, r1), 0),
+            state=Plot.STATE_KNOWN)
+        plot.set_survey(grade_err=self._rng.uniform(-0.1, 0.1),
+                        reserve_err=self._rng.uniform(-0.1, 0.1))
+        return plot
 
     # ---- 圈内补偿权重 ----------------------------------------------
     def _pool_key(self, p: dict) -> Tuple[str, Optional[str]]:

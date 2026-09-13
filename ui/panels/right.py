@@ -741,6 +741,27 @@ class LayersPanel(_RightPanel):
         self.lines.configure(text="\n".join(rows))
 
 
+def _bar(frac: float, width: int = 10) -> str:
+    """文本进度条（黑白灰主题：用稳定字符，不用方块 emoji）。"""
+    frac = max(0.0, min(1.0, float(frac)))
+    n = int(round(frac * width))
+    return "#" * n + "." * (width - n)
+
+
+def _spark(values, top: float, width: int = 24) -> str:
+    """电量时间线的迷你折线（仅文本，等宽字体下可读）。"""
+    ramp = " .:-=+*#"
+    vals = list(values)[-width:]
+    if not vals:
+        return ""
+    top = max(1e-9, float(top))
+    out = []
+    for v in vals:
+        i = int(max(0.0, min(1.0, float(v) / top)) * (len(ramp) - 1))
+        out.append(ramp[i])
+    return "".join(out)
+
+
 class PowerPanel(_RightPanel):
     """电力专页：产/耗/净 + 最大耗电者 + 可再生实时倍率(昼夜×事件)。"""
     key = "power"
@@ -768,6 +789,35 @@ class PowerPanel(_RightPanel):
         net = pb["produce"] - pb["consume"]
         rows = [f"产电 {pb['produce']:.2f}/s | 耗电 {pb['consume']:.2f}/s",
                 f"净值 {net:+.2f}/s " + ("(盈余)" if net >= 0 else "(缺电!)")]
+        # 批次4：电网容量 / 储能余量 / 优先级降载 / 电量时间线
+        pw = engine.registry.get("power")
+        if pw is not None and hasattr(pw, "status"):
+            st = pw.status(engine)
+            cap = max(1e-9, float(st.get("capacity", 0.0)))
+            frac = float(st.get("stored", 0.0)) / cap
+            rows.append(f"电网 {st['stored']:.0f}/{st['capacity']:.0f}kWh "
+                        f"[{_bar(frac)}] 余量 {st['headroom']:.0f}")
+            storage = st.get("storage") or []
+            if storage:
+                rows.append("储能:")
+                zh = {"charging": "充电", "discharging": "放电", "idle": "待机"}
+                for s in storage:
+                    sc = max(1e-9, float(s.get("capacity", 0.0)))
+                    rows.append(
+                        f"  {s['name']} {s['stored']:.0f}/{s['capacity']:.0f}"
+                        f" [{_bar(float(s['stored']) / sc)}]"
+                        f" {zh.get(s.get('state'), s.get('state'))}"
+                        f" 上限{s['max_rate']:.1f}/s 效率{s['efficiency']:.0%}")
+            else:
+                rows.append("储能: 无（建「电池组」/「蓄热罐」把余电存起来）")
+            shed = st.get("shed") or {}
+            if shed:
+                rows.append("降载: " + "、".join(
+                    f"{k}×{v:.2f}" for k, v in shed.items())
+                    + "（缺电时先停低优先级）")
+            tl = st.get("timeline") or []
+            if len(tl) >= 2:
+                rows.append("电量时间线: " + _spark(tl, cap))
         cons = sorted(pb.get("consumers", []), key=lambda x: -x[1])[:5]
         if cons:
             rows.append("")
@@ -838,6 +888,20 @@ class EnvironmentPanel(_RightPanel):
             rows.append(f"生产 ×{prod:g}")
         if mem != 1.0:
             rows.append(f"记忆劣化 ×{mem:g}")
+        # D1（批次4）：发电影响 —— 光热/光伏/风电的实时倍率（含昼夜）
+        dl = engine.registry.get("daylight")
+        parts = []
+        for key, label in (("solar", "光热"), ("pv", "光伏"), ("wind", "风电")):
+            mul = env.effect(key)
+            mul *= dl.effect("solar") if (dl is not None
+                                          and key in ("solar", "pv")) else 1.0
+            if abs(mul - 1.0) > 1e-9:
+                parts.append(f"{label} ×{mul:.2f}")
+        rows.append("发电影响: " + ("  ".join(parts) if parts
+                                    else "无（各类出力都是 ×1.00）"))
+        # 光照类还看昼夜节律
+        if dl is not None:
+            rows.append(f"昼夜: {dl.phase_text()}（日照 ×{dl.effect('solar'):.2f}）")
         if desc:
             rows.append(f"描述: {desc}")
         self.lines.configure(text="\n".join(rows))

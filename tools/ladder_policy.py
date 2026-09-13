@@ -76,6 +76,9 @@ PLAN = [
          staff="units", count=1, rec="db_units", why="执行单元装配"),
     dict(key="gasgen", def_id="gas_generator", plot_kind="empty", out=None,
          staff="gas", count=1, why="燃气发电（烧副产煤气的出口）"),
+    dict(key="batt", def_id="battery_bank", plot_kind="empty", out=None,
+         staff="always", count=1, rec="db_copper",
+         why="电池组（电网满了就把余电存起来）"),
     dict(key="vent", def_id="vent_tower", plot_kind="empty", out=None,
          staff="backlog", count=1, rec="db_coking", why="副产物放空"),
 ]
@@ -83,7 +86,7 @@ PRIORITY = {r["key"]: i for i, r in enumerate(PLAN)}
 # 收尾阶段（主线全固化后）只维护与数据库直接相关的产线，不再铺新摊子
 ENDGAME_ROLES = {"power", "coal", "scrap", "iron", "lime", "water", "coke",
                  "pig", "steel", "sulfur", "acid", "ammonia", "kit", "vent",
-                 "unitf"}
+                 "unitf", "batt"}
 
 
 def _load(name: str) -> dict:
@@ -235,6 +238,9 @@ class LadderPolicy:
 
     def _needed(self, role: dict, rep: dict, targets: dict) -> bool:
         kind = role.get("staff")
+        # 电池组只在"电网满了、发电被浪费"时建；建好之后一直派员（要能充放）
+        if role["key"] == "batt":
+            return (self._count(rep, "batt") > 0) or self._grid_full(rep)
         if kind == "always":
             if role["key"] == "power":
                 return self._power_needed(rep)
@@ -260,11 +266,17 @@ class LadderPolicy:
         """电力节流：电量够高就停机省煤（煤少时更省）——向导也建议"不急的设施调离"。
 
         - 煤少（<300）：充到 90kWh 就停机；
-        - 煤多：充到 400kWh（为数据库的 power_req 与后续产线留余量）。
+        - 煤多：充到电网容量的 90%（为数据库的 power_req 与后续产线留余量）。
         """
         stored = float((rep.get("power") or {}).get("stored", 0.0))
+        cap = float((rep.get("power") or {}).get("capacity", 0.0) or 400.0)
         coal = self._stock(rep, "coal")
-        return stored < (90.0 if coal < 300.0 else 400.0)
+        return stored < (90.0 if coal < 300.0 else cap * 0.9)
+
+    def _grid_full(self, rep: dict) -> bool:
+        """有没有发电设施因为"电网已满"而被迫降载（A13 → 该建储能的信号）。"""
+        return any(f.get("reason_code") == "grid_full"
+                   for f in rep.get("facilities", []))
 
     def _backlog_over(self, rep: dict) -> List[str]:
         return [k for k, v in (rep.get("backlog") or {}).items()

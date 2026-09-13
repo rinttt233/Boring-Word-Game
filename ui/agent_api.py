@@ -71,6 +71,8 @@ def build_report(engine, router=None) -> dict:
                                        3),
                 "policy": (getattr(ind, "backlog_policy", None)
                            if ind is not None else None),
+                # 批次4：该设施的供电优先级档（0 可选 / 1 生产 / 2 关键）
+                "power_priority": int(d.get("power_priority", 1)),
             })
 
     plot_list = []
@@ -127,6 +129,13 @@ def build_report(engine, router=None) -> dict:
                       "net": round(pb["produce"] - pb["consume"], 3),
                       "consumers": [[n, round(v, 3)] for n, v in pb["consumers"]],
                       "producers": [[n, round(v, 3)] for n, v in pb["producers"]]})
+    # 批次4：电网容量/余量、优先级降载、储能、电量时间线（字段只增不改）
+    pw = get("power")
+    if pw is not None and hasattr(pw, "status"):
+        st = pw.status(engine)
+        power.update({k: st[k] for k in
+                      ("capacity", "headroom", "storage_capacity", "storage",
+                       "shed", "factors", "demand", "timeline")})
 
     maint_info = {"enabled": False}
     if maint is not None:
@@ -317,6 +326,43 @@ def suggest_actions(engine, router=None, limit: int = 5) -> List[dict]:
                 add(f"unassign {burners[0].id}",
                     f"电量已存 {stored:.0f}kWh 而煤只剩 {coal_now:.0f}："
                     f"先停「{burners[0].name}」省煤，缺电时再 assign")
+
+    # 1.6) 电网已满（A13）→ 存起来或停机组；缺电降载（4a）→ 先保高优先级
+    full = [f for f in facs if getattr(f, "stall_code", None) == "grid_full"]
+    shed = [f for f in facs if getattr(f, "stall_code", None) == "shed"]
+    pw = reg.get("power")
+    stored_kwh = engine.economy.get("electricity")
+    if full and idle >= 0:
+        built = {f.def_id for f in facs}
+        empty = _free_empty()
+        for cand in ("battery_bank", "heat_storage"):
+            d = ind.defs.get(cand)
+            if d is None or cand in built or empty is None:
+                continue
+            need = d.get("requires_recovery")
+            if need and (rec is None or rec.status.get(need) not in
+                         ("permanent", "active")):
+                continue
+            add(f"build {empty.id} {cand}",
+                f"电网已满（{stored_kwh:.0f}kWh）导致 {len(full)} 台发电设施"
+                f"「{d.get('name', cand)}」消纳不了：建储能把余电存起来",
+                _missing(engine, d.get("build_cost", {}), router)
+                or _unit_block(idle))
+            break
+        else:
+            p = pw
+            add(f"unassign {full[0].id}",
+                f"电网已满、发电被浪费：先把「{full[0].name}」调离（缺电再 assign）")
+    elif shed:
+        p = pw
+        names = "、".join(f"{rname(f.def_id)}" for f in shed[:2])
+        tier = ""
+        if p is not None and hasattr(p, "shed_tiers"):
+            tier = "、".join(p.tier_name(k) for k in p.shed_tiers()) or ""
+        f0 = shed[0]
+        add(f"unassign {f0.id}",
+            f"缺电按优先级降载（{tier or '低优先级'}档）：{names} 等已停机。"
+            "要么加发电、要么把不急的设施调离/封存腾出电力")
 
     # 2) 施工中：等完工
     building = [f for f in facs if f.under_construction]

@@ -36,8 +36,8 @@ def main():
     ui = ConsoleUI(eng, subs, speed=2.0)
     eng.clock.resume()
 
-    # 1) 出生即有 3 执行单元 + 库存 + 出生残骸
-    assert eng.units.count() == 3, "出生应 3 单元"
+    # 1) 出生即有 4 执行单元（A14：多一个"施工单元"）+ 库存 + 出生残骸
+    assert eng.units.count() == 4, "出生应 4 单元（A14）"
     assert eng.world.get("WRECK1") is not None, "出生应有残骸可回收"
 
     # 2) HOME 建发电站（**建造耗时作业**：占单元→完工→再分配）
@@ -76,8 +76,17 @@ def main():
     assert tick_until(eng, lambda: not ind.facilities["F3"]
                       .under_construction, max_s=60), "回收站应建成"
     cmd(ui, "assign F3")
-    # 三单元全部占满 → 不能再去占领别处（调度张力）
+    # A14 多给了一个"施工单元"：把 RIVER 也用上，四个单元全部占满
     cmd(ui, "claim RIVER")
+    tick_until(eng, lambda: eng.world.get("RIVER").state == "claimed",
+               max_s=60)
+    cmd(ui, "build RIVER extractor")
+    assert tick_until(eng, lambda: not ind.facilities["F4"]
+                      .under_construction, max_s=60), "取水设施应建成"
+    cmd(ui, "assign F4")
+    # 四单元全部占满 → 不能再去占领别处（调度张力仍在）
+    target = next(p for p in survey_plots if p.state == "known")
+    cmd(ui, f"claim {target.id}")
     assert any("没有空闲" in l for l in eng.log_lines[-2:]), \
         "单元占满时 claim 应被拒绝"
     # 5) 巡航 40s：电厂+采矿机运转
@@ -91,7 +100,7 @@ def main():
     data = eng.to_dict()
     eng2 = build_engine()
     eng2.from_dict(data)
-    assert len(eng2.registry.get("industry").facilities) == 3
+    assert len(eng2.registry.get("industry").facilities) == 4
     assert eng2.economy.get("iron_ore") > 0
     print("闭环步骤 6 OK：存档读档含设施状态")
 
@@ -106,9 +115,10 @@ def main():
     ind2.unassign(eng2, "F2")
     err = ind2.build(eng2, wid, "salvager")
     assert err is None, err
-    assert tick_until(eng2, lambda: not ind2.facilities["F4"]
-                      .under_construction, max_s=60), "回收站应建成"
-    ind2.assign(eng2, "F4")
+    sal = next(f for f in ind2.facilities.values() if f.plot_id == wid)
+    assert tick_until(eng2, lambda: not sal.under_construction, max_s=60), \
+        "回收站应建成"
+    ind2.assign(eng2, sal.id)
     n0 = eng2.units.count()
     tick_until(eng2, lambda: eng2.world.get(wid).state == "depleted",
                max_s=30)

@@ -1,0 +1,16 @@
+{
+ "_comment": "电力体系（批次4）：电网容量 / 自放电 / 优先级降载参数。缺电时不再「全厂一起半速」，而是按设施 def 的 power_priority 从低到高降载（0 可选 → 1 生产 → 2 关键）。电网存量有上限（A13）：超出的发电量消纳不了，发电设施会按「电网已满」降载（余量小于容量 2% 即视为满）；另有固定速率的小幅自放电。储能设施（kind=storage）自带容量与充放速率，电量记在设施上、随存档；电网存量的 75% 以上充电、25% 以下放电。注意：上限 400kWh 必须高于**最贵的主线恢复+固化**（稀土地球 220+90=310），否则后期会卡死。",
+ "base_capacity": 400.0,
+ "self_discharge_per_sec": 0.05,
+ "priority_default": 1,
+ "priority_names": {
+  "0": "可选",
+  "1": "生产",
+  "2": "关键"
+ },
+ "charge_high_ratio": 0.75,
+ "charge_low_ratio": 0.25,
+ "grid_full_ratio": 0.02,
+ "timeline_seconds": 90.0,
+ "timeline_samples": 30
+}

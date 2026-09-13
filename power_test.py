@@ -8,6 +8,7 @@ sys.path.insert(0, ".")
 from main import build_engine
 
 eng = build_engine()
+eng.registry.get("power").install_unbounded()   # 端点聚焦产线数值：电网上限与本测试无关（批次4）
 eng.clock.resume()
 ind = eng.registry.get("industry")
 ind.instant_build = True     # 端点脚本聚焦产线数值；建造耗时见 tests/test_build_time.py
@@ -179,5 +180,38 @@ assert d_pv_dust < d_pv_fair * 0.1, \
 # 光热沙暴余 0.3 → 应明显高于光伏的 0.05 倍率
 assert d_csp_dust > d_pv_dust * 3, \
     f"沙暴下光热应显著高于光伏: csp={d_csp_dust} pv={d_pv_dust}"
+
+# ---- 批次4：电网上限 / 优先级降载 / 储能充放（真实路径，不旁路）----
+eng.registry.get("power").base_capacity = 400.0
+eng.economy.set("electricity", 399.0)
+env.current_id = "fair"
+eng.clock.time = 5.0
+# 电网已满 → 燃煤电站降载（不白烧燃料）
+coal0 = eng.economy.get("coal")
+eng.tick(1.0)
+grid_fac = [f for f in ind.facilities.values()
+            if f.def_id in ("power_plant", "coal_stove", "csp_plant",
+                            "solar_farm", "pv", "wind_farm")
+            and f.stall_code == "grid_full"]
+assert grid_fac, "电网已满时应报 grid_full"
+assert abs(eng.economy.get("coal") - coal0) < 0.5, "电网已满时不该白烧燃料"
+result["grid_full_ok"] = True
+# 储能：电网 90% → 充电；电网 10% → 放电
+batt_id = build_when_possible("battery_bank", "battery")   # db_copper 上面恢复过
+batt = ind.facilities[batt_id]
+eng.economy.set("electricity", 380.0)
+eng.tick(1.0)
+chg = batt.stored
+assert chg > 0, "电网高位时电池应充电"
+eng.economy.set("electricity", 40.0)
+eng.tick(1.0)
+assert batt.stored < chg, "电网低位时电池应放电"
+result["storage_charge"] = round(chg, 2)
+result["storage_after_discharge"] = round(batt.stored, 2)
+# 优先级：把电池改成 0 档、电站 2 档，缺电时低档先停
+assert ind.defs["battery_bank"].get("power_priority") == 1
+assert ind.defs["power_plant"].get("power_priority") == 2
+assert ind.defs["vent_tower"].get("power_priority") == 0
+result["priority_ok"] = True
 
 print("POWER-ENDPOINT-OK", result)
